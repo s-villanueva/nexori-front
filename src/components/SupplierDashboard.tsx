@@ -181,7 +181,7 @@ const handleVerify2FA = async () => {
   setTotpVerifying(true);
   setTotpError(null);
   try {
-    await api.post(`/api/v1/usuarios/verify/${user.id}?codigo=${totpCode}`, {});
+    await api.post(`/api/v1/usuarios/verify/${user.id}?code=${totpCode}`, {});
     setTotpVerified(true);
     setTotpQr(null);
     setTotpCode("");

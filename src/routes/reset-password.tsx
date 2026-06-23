@@ -1,23 +1,45 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AuthShell, BrandHeader, SecurityFooter } from "../components/auth-shell";
+import { api } from "../api/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Reset Password | ProcureSpace" },
-      { name: "description", content: "Set a new ProcureSpace account password." },
+      { title: "Restablecer Contraseña | Nexori" },
+      { name: "description", content: "Establecer una nueva contraseña de cuenta Nexori." },
     ],
   }),
   component: ResetPasswordPage,
 });
 
+function scorePassword(pw: string) {
+  let s = 0;
+  if (pw.length >= 12) s += 2;
+  else if (pw.length >= 8) s += 1;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s += 1;
+  if (/\d/.test(pw)) s += 1;
+  if (/[^A-Za-z0-9]/.test(pw)) s += 1;
+  return Math.min(s, 5);
+}
+
 function ResetPasswordPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showA, setShowA] = useState(false);
   const [showB, setShowB] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Retrieve email on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setEmail(sessionStorage.getItem("reset_email") || "");
+    }
+  }, []);
 
   const checks = useMemo(() => ({
     len: pw.length >= 8,
@@ -25,69 +47,117 @@ function ResetPasswordPage() {
     num: /\d/.test(pw),
     case: /[a-z]/.test(pw) && /[A-Z]/.test(pw),
   }), [pw]);
+  
   const passed = Object.values(checks).filter(Boolean).length;
-  const strength = passed <= 1 ? { w: "25%", color: "var(--error)", label: "Weak" }
-    : passed === 2 ? { w: "50%", color: "#f5b748", label: "Moderate" }
-    : passed === 3 ? { w: "75%", color: "var(--tertiary)", label: "Strong" }
-    : { w: "100%", color: "var(--primary)", label: "Excellent" };
+  const strength = passed <= 1 ? { w: "25%", color: "var(--error)", label: "Débil" }
+    : passed === 2 ? { w: "50%", color: "#f5b748", label: "Moderada" }
+    : passed === 3 ? { w: "75%", color: "var(--tertiary)", label: "Fuerte" }
+    : { w: "100%", color: "var(--primary)", label: "Excelente" };
 
-  const ok = pw && pw === confirm && passed >= 3;
+  const ok = email && code.trim() && pw && pw === confirm && passed >= 3 && !loading;
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ok) return;
-    navigate({ to: "/login" });
+    setLoading(true);
+
+    try {
+      // Hit endpoint as RequestParam (query string)
+      await api.post(
+        `/api/v1/auth/password-reset/confirm?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code.trim())}&newPassword=${encodeURIComponent(pw)}`,
+        {}
+      );
+
+      toast.success("Contraseña actualizada correctamente");
+      sessionStorage.removeItem("reset_email");
+      
+      // Redirect to landing page with login modal triggered
+      window.location.href = "/?login=true";
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al actualizar la contraseña. Verifique el código.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <AuthShell maxWidth={520}>
-      <BrandHeader subtitle="Secure Payment Orchestration" />
+      <BrandHeader />
 
-      <div className="glass-panel flex w-full flex-col items-center rounded-xl p-8 text-center shadow-2xl">
-        <div className="mb-6">
-          <h2 className="font-display text-3xl font-bold text-on-surface">Reset Your Password</h2>
-          <p className="mt-2 px-4 text-on-surface-variant">
-            Create a new, strong password for your account to ensure continued vault security.
+      <div className="glass-panel flex w-full flex-col items-center rounded-xl p-8 text-center shadow-2xl bg-white border border-[#CBD6D4]">
+        <div className="mb-6 text-left w-full">
+          <h2 className="font-display text-2xl font-bold text-[#122A25]">Restablecer Contraseña</h2>
+          <p className="mt-1.5 text-xs text-[#3B534E] leading-relaxed">
+            Ingrese el código de recuperación enviado a su correo y establezca su nueva contraseña.
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="w-full space-y-5 text-left">
-          <PwField label="New Password" id="new_password" value={pw} setValue={setPw} show={showA} setShow={setShowA} placeholder="Enter new password" />
+          {/* Email input (read-only or changeable if empty) */}
+          <div className="space-y-1.5">
+            <label className="ps-label font-bold text-xs uppercase tracking-wide text-[#3B534E]" htmlFor="email_reset">Correo Electrónico</label>
+            <input
+              id="email_reset"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="ps-input w-full"
+              placeholder="usuario@empresa.com"
+              required
+            />
+          </div>
 
-          <div className="rounded-lg border border-white/5 bg-surface-container-lowest p-4">
+          {/* Recovery Code */}
+          <div className="space-y-1.5">
+            <label className="ps-label font-bold text-xs uppercase tracking-wide text-[#3B534E]" htmlFor="code_reset">Código de Confirmación</label>
+            <input
+              id="code_reset"
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="ps-input w-full tracking-widest text-center font-bold text-sm"
+              placeholder="Ingrese el código"
+              required
+            />
+          </div>
+
+          <PwField label="Nueva Contraseña" id="new_password" value={pw} setValue={setPw} show={showA} setShow={setShowA} placeholder="Mínimo 8 caracteres" />
+
+          <div className="rounded-xl border border-[#CBD6D4]/60 bg-[#EAEFEF]/50 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[12px] text-on-surface-variant">Security Strength</span>
-              <span className="text-[12px] font-semibold uppercase" style={{ color: strength.color }}>
+              <span className="text-[11px] text-[#3B534E] font-semibold">Fortaleza de Seguridad</span>
+              <span className="text-[11px] font-bold uppercase" style={{ color: strength.color }}>
                 {strength.label}
               </span>
             </div>
-            <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-surface-container-highest">
+            <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-neutral-200">
               <div className="h-full transition-all duration-500"
-                style={{ width: strength.w, background: strength.color, boxShadow: `0 0 8px ${strength.color}` }} />
+                style={{ width: strength.w, background: strength.color }} />
             </div>
-            <ul className="grid grid-cols-2 gap-2 text-[12px]">
-              <Check ok={checks.len} text="8+ characters" />
-              <Check ok={checks.sym} text="One symbol" />
-              <Check ok={checks.num} text="One number" />
-              <Check ok={checks.case} text="Upper/Lower" />
+            <ul className="grid grid-cols-2 gap-2 text-[11px]">
+              <Check ok={checks.len} text="8+ caracteres" />
+              <Check ok={checks.sym} text="Un símbolo (e.g. @, !)" />
+              <Check ok={checks.num} text="Un número" />
+              <Check ok={checks.case} text="Mayús. y Minús." />
             </ul>
           </div>
 
-          <PwField label="Confirm New Password" id="confirm_password" value={confirm} setValue={setConfirm} show={showB} setShow={setShowB} placeholder="Re-enter password" />
+          <PwField label="Confirmar Nueva Contraseña" id="confirm_password" value={confirm} setValue={setConfirm} show={showB} setShow={setShowB} placeholder="Repita la contraseña" />
 
           {confirm && pw !== confirm && (
-            <p className="text-[12px] text-error">Passwords do not match.</p>
+            <p className="text-[11px] font-bold text-red-600">Las contraseñas no coinciden.</p>
           )}
 
-          <button type="submit" disabled={!ok} className="ps-btn-primary">
-            <span>Update Password</span>
+          <button type="submit" disabled={!ok} className="ps-btn-primary w-full flex items-center justify-center gap-2">
+            <span>{loading ? "Actualizando..." : "Actualizar Contraseña"}</span>
             <span className="material-symbols-outlined text-[20px]">lock_reset</span>
           </button>
         </form>
 
-        <Link to="/login" className="mt-5 flex items-center gap-1 text-[12px] text-on-surface-variant transition-colors hover:text-primary">
+        <Link to="/" search={{ login: "true" }} className="mt-5 flex items-center gap-1.5 text-[12px] text-[#3B534E] font-semibold hover:text-[#0F6E56] transition-colors">
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          Cancel and return to sign in
+          Cancelar y volver a iniciar sesión
         </Link>
       </div>
 
@@ -102,19 +172,20 @@ function PwField({ label, id, value, setValue, show, setShow, placeholder }: {
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="ps-label ml-1" htmlFor={id}>{label}</label>
+      <label className="ps-label font-bold text-xs uppercase tracking-wide text-[#3B534E]" htmlFor={id}>{label}</label>
       <div className="relative">
         <input
           id={id}
           type={show ? "text" : "password"}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="ps-input pr-10"
+          className="ps-input pr-10 w-full"
           placeholder={placeholder}
+          required
         />
         <button type="button" onClick={() => setShow(!show)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary">
-          <span className="material-symbols-outlined">{show ? "visibility_off" : "visibility"}</span>
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3B534E] hover:text-[#122A25]">
+          <span className="material-symbols-outlined text-[20px]">{show ? "visibility_off" : "visibility"}</span>
         </button>
       </div>
     </div>
@@ -123,9 +194,9 @@ function PwField({ label, id, value, setValue, show, setShow, placeholder }: {
 
 function Check({ ok, text }: { ok: boolean; text: string }) {
   return (
-    <li className="flex items-center gap-1.5" style={{ color: ok ? "var(--tertiary)" : "var(--on-surface-variant)" }}>
-      <span className="material-symbols-outlined text-[16px]">{ok ? "check_circle" : "circle"}</span>
-      {text}
+    <li className="flex items-center gap-1.5" style={{ color: ok ? "#0F6E56" : "#3B534E" }}>
+      <span className="material-symbols-outlined text-[15px]">{ok ? "check_circle" : "circle"}</span>
+      <span className={ok ? "font-bold text-[#0F6E56]" : "opacity-85"}>{text}</span>
     </li>
   );
 }

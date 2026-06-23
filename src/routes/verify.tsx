@@ -8,8 +8,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/verify")({
   head: () => ({
     meta: [
-      { title: "Verify Identity | ProcureSpace" },
-      { name: "description", content: "Two-factor verification for your ProcureSpace account." },
+      { title: "Verify Identity | Nexori" },
+      { name: "description", content: "Two-factor verification for your Nexori account." },
     ],
   }),
   component: VerifyPage,
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/verify")({
 
 function VerifyPage() {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn2FA } = useAuth();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState(
@@ -30,9 +30,8 @@ function VerifyPage() {
     setSubmitting(true);
     try {
       const savedEmail = sessionStorage.getItem("2fa_email") || email;
-      const savedPassword = sessionStorage.getItem("2fa_password") || "SUPPLIER";
       
-      await signIn(savedEmail, savedPassword);
+      await signIn2FA(savedEmail, code);
       toast.success("Successfully authenticated with 2FA!");
       navigate({ to: "/app" });
     } catch (err: any) {
@@ -45,7 +44,7 @@ function VerifyPage() {
 
   return (
     <AuthShell maxWidth={480}>
-      <BrandHeader subtitle="Secure Smart Auth" />
+      <BrandHeader />
 
       <form onSubmit={onSubmit} className="glass-card flex w-full flex-col gap-6 rounded-xl p-8 shadow-2xl">
         <div className="flex flex-col items-center gap-2 text-center">

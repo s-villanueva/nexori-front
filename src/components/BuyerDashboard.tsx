@@ -51,6 +51,9 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
   const [dbContracts, setDbContracts] = useState<any[]>([]);
   const [dbSuppliers, setDbSuppliers] = useState<any[]>([]);
 
+  // 2FA & Supplier Conversion state variables
+  const [showBecomeSupplierModal, setShowBecomeSupplierModal] = useState(false);
+
   // 2FA state variables
   const [totpQr, setTotpQr] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
@@ -196,7 +199,7 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
     setTotpVerifying(true);
     setTotpError(null);
     try {
-      await api.post(`/api/v1/usuarios/verify/${user.id}?codigo=${totpCode}`, {});
+      await api.post(`/api/v1/usuarios/verify/${user.id}?code=${totpCode}`, {});
       setTotpVerified(true);
       setTotpQr(null);
       setTotpCode("");
@@ -1160,6 +1163,28 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                     </div>
                   )}
                 </div>
+
+                {/* B2B Supplier Conversion Section */}
+                <div className="rounded-3xl border border-white/10 bg-surface-container-low p-6 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                        <span className="material-symbols-outlined text-xl text-primary font-bold">store</span>
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-on-surface">Habilitar canal de venta</h3>
+                        <p className="text-xs text-on-surface-variant">Convierte tu empresa en proveedora para publicar productos y firmar contratos.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBecomeSupplierModal(true)}
+                    className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10 cursor-pointer"
+                  >
+                    <Icon name="local_mall" className="text-lg" />
+                    Convertirse en Proveedor
+                  </button>
+                </div>
               </section>
             )}
           </div>
@@ -1185,11 +1210,109 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
         onClose={() => setShowCreateOrder(false)}
         onCreated={() => { setShowCreateOrder(false); /* refetch orders */ }}
         />
+      {showBecomeSupplierModal && (
+        <BecomeSupplierModal
+          onClose={() => setShowBecomeSupplierModal(false)}
+          onSuccess={() => {
+            setShowBecomeSupplierModal(false);
+          }}
+          user={user}
+        />
+      )}
       {/* <StereumPayModal
         isOpen={selectedOrderIdForPay !== null}
         onClose={() => setSelectedOrderIdForPay(null)}
         orderId={selectedOrderIdForPay || ""}
       /> */}
+    </div>
+  );
+}
+
+function BecomeSupplierModal({ onClose, onSuccess, user }: { onClose: () => void; onSuccess: () => void; user: any }) {
+  const [loading, setLoading] = useState(false);
+  const [nombreEmpresa, setNombreEmpresa] = useState(user?.nombreEmpresa || "");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nombreEmpresa) {
+      toast.error("El nombre de la empresa es obligatorio.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        nombreEmpresa: nombreEmpresa,
+        activo: true,
+        idEmpresa: user?.id_empresa ? { id: user.id_empresa } : null
+      };
+      await api.post("/api/v1/proveedores", payload);
+      toast.success("Registro de proveedor completado con éxito.");
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al registrar como proveedor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0F6E56] p-6 text-white shadow-2xl space-y-5">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">
+              Registrar Proveedor
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Convertirse en Proveedor
+            </h2>
+          </div>
+          <button onClick={onClose} className="rounded-xl border border-white/10 p-2 text-white/70 hover:text-white cursor-pointer">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-sm text-white/80 leading-relaxed">
+            Al convertir tu empresa en proveedora, podrás publicar productos, gestionar almacenes de stock, definir reglas de comisión y firmar contratos de tarifas B2B con otras empresas de la red.
+          </p>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-white/70 block">
+              Nombre de la Empresa Proveedora
+            </label>
+            <input
+              type="text"
+              value={nombreEmpresa}
+              onChange={(e) => setNombreEmpresa(e.target.value)}
+              placeholder="Nombre comercial de proveedor"
+              className="w-full rounded-xl bg-white px-4 py-3 text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#BA7517]"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white/80 hover:text-white cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center gap-2 rounded-xl bg-[#BA7517] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:brightness-110 disabled:opacity-50 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm font-bold">
+                {loading ? "hourglass_empty" : "store"}
+              </span>
+              {loading ? "Registrando…" : "Confirmar registro"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

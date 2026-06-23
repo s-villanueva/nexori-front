@@ -8,6 +8,8 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
 }
+
+
 export function CreateContractModal({ onClose, onSuccess }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);

@@ -36,7 +36,11 @@ async function request<T = any>(path: string, options: RequestOptions = {}): Pro
   }
 
   if (!text) return null;
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as unknown as T;
+  }
 }
 
 export const api = {

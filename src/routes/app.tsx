@@ -7,8 +7,8 @@ import { SupplierDashboard } from "../components/SupplierDashboard";
 export const Route = createFileRoute("/app")({
   head: () => ({
     meta: [
-      { title: "Dashboard | ProcureSpace" },
-      { name: "description", content: "ProcureSpace procurement command center." },
+      { title: "Dashboard | Nexori" },
+      { name: "description", content: "Nexori procurement command center." },
     ],
   }),
   component: AppDashboard,

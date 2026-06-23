@@ -1,12 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthShell, BrandHeader, SecurityFooter } from "../components/auth-shell";
+import { api } from "../api/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({
     meta: [
-      { title: "Account Recovery | ProcureSpace" },
-      { name: "description", content: "Recover your ProcureSpace account." },
+      { title: "Recuperación de Cuenta | Nexori" },
+      { name: "description", content: "Recupere su cuenta de Nexori." },
     ],
   }),
   component: ForgotPasswordPage,
@@ -15,34 +17,47 @@ export const Route = createFileRoute("/forgot-password")({
 function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    setSent(true);
-    setTimeout(() => navigate({ to: "/reset-password" }), 900);
+    setLoading(true);
+
+    try {
+      // Hit endpoint as RequestParam (query string)
+      await api.post(`/api/v1/auth/password-reset/request?email=${encodeURIComponent(email.trim())}`, {});
+      
+      toast.success("Código enviado al correo");
+      sessionStorage.setItem("reset_email", email.trim());
+      
+      // Redirect to confirmation screen
+      navigate({ to: "/reset-password" });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al solicitar la recuperación. Verifique su correo.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <AuthShell maxWidth={480}>
-      <BrandHeader subtitle="Enterprise Tier Security" />
+      <BrandHeader />
 
-      <div className="glass-panel relative w-full rounded-xl p-8 shadow-2xl">
-        <div className="absolute right-0 top-0 h-12 w-12 rounded-tr-xl border-r-2 border-t-2 border-primary/20" />
-
+      <div className="glass-panel relative w-full rounded-xl p-8 shadow-2xl text-left bg-white border border-[#CBD6D4]">
         <header className="mb-6">
-          <h2 className="font-display text-2xl font-semibold text-on-surface">Account Recovery</h2>
-          <p className="mt-1 text-on-surface-variant">
-            Enter your work email to receive a 6-digit recovery code.
+          <h2 className="font-display text-2xl font-bold text-[#122A25]">Recuperar Contraseña</h2>
+          <p className="mt-1.5 text-xs text-[#3B534E] leading-relaxed">
+            Ingrese su correo electrónico institucional registrado para recibir un código de confirmación.
           </p>
         </header>
 
         <form onSubmit={onSubmit} className="space-y-5">
           <div className="space-y-2">
-            <label htmlFor="email" className="ps-label" style={{ color: "var(--primary)" }}>Work Email Address</label>
+            <label htmlFor="email" className="ps-label font-bold text-xs uppercase tracking-wider text-[#3B534E]">Correo Electrónico</label>
             <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-[#3B534E]">
                 mail
               </span>
               <input
@@ -51,26 +66,26 @@ function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                className="ps-input pl-11"
+                placeholder="usuario@empresa.com"
+                className="ps-input pl-11 w-full"
               />
             </div>
           </div>
 
-          <button type="submit" disabled={sent} className="ps-btn-primary">
-            <span>{sent ? "Code Sent" : "Send Code"}</span>
+          <button type="submit" disabled={loading} className="ps-btn-primary w-full flex items-center justify-center gap-2">
+            <span>{loading ? "Enviando..." : "Enviar Código"}</span>
             <span className="material-symbols-outlined text-[20px]">
-              {sent ? "check_circle" : "arrow_forward"}
+              mail_lock
             </span>
           </button>
         </form>
 
-        <div className="mt-6 flex justify-center border-t border-white/5 pt-4">
-          <Link to="/login" className="group flex items-center gap-1 text-[12px] text-on-surface-variant transition-colors hover:text-primary">
+        <div className="mt-6 flex justify-center border-t border-neutral-100 pt-4">
+          <Link to="/" search={{ login: "true" }} className="group flex items-center gap-1.5 text-[12px] text-[#3B534E] font-semibold hover:text-[#0F6E56] transition-colors">
             <span className="material-symbols-outlined text-[18px] transition-transform group-hover:-translate-x-1">
               arrow_back
             </span>
-            Back to Sign In
+            Volver a Iniciar Sesión
           </Link>
         </div>
       </div>

@@ -19,6 +19,7 @@ type AuthState = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password?: string) => Promise<User>;
+  signIn2FA: (data: string, code: string) => Promise<User>;
   signOut: () => void;
 };
 
@@ -99,6 +100,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn: async (email: string, password = "") => {
         // 1. Post to login endpoint
         const response = await api.post("/api/v1/auth/login", { email, password });
+        // Expected response format: { access_token: string }
+        const token = response?.access_token || response?.token || response?.jwt || response?.accessToken;
+        if (!token) {
+          throw new Error("No token returned from server.");
+        }
+
+        // 2. Save the token
+        setToken(token);
+
+        // 3. Build session details
+        const sessionData = await buildSession(token);
+
+        // 4. Save session and update state
+        localStorage.setItem("b2b_user", JSON.stringify(sessionData));
+        setUser(sessionData);
+        return sessionData;
+      },
+      signIn2FA: async (data: string, code: string) => {
+        // 1. Post to login/2fa endpoint
+        const response = await api.post("/api/v1/auth/login/2fa", { data, code });
         // Expected response format: { access_token: string }
         const token = response?.access_token || response?.token || response?.jwt || response?.accessToken;
         if (!token) {

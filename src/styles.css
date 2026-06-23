@@ -1,0 +1,195 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Nexori design system — Flat, premium enterprise fintech theme */
+@theme inline {
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--on-surface);
+  --color-surface: var(--surface);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-surface-variant: var(--surface-variant);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary: var(--secondary);
+  --color-secondary-container: var(--secondary-container);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-error: var(--error);
+  --color-border: var(--outline-variant);
+
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  --shadow-glow-cyan: none;
+  --shadow-glow-cyan-strong: none;
+}
+
+:root {
+  --background: #EAEFEF;
+  --surface: #FFFFFF;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-low: #E0EAE7;
+  --surface-container: #D7E5E1;
+  --surface-container-high: #CBDCD8;
+  --surface-container-highest: #C0D3CE;
+  --surface-variant: #C0D3CE;
+  --on-surface: #122A25;
+  --on-surface-variant: #3B534E;
+  --primary: #0F6E56;
+  --on-primary: #FFFFFF;
+  --primary-container: #E6F3F0;
+  --on-primary-container: #0A4A3A;
+  --secondary: #BA7517;
+  --secondary-container: #FDF4E7;
+  --tertiary: #BA7517;
+  --tertiary-container: #FDF4E7;
+  --outline: #778F8A;
+  --outline-variant: #CBD6D4;
+  --error: #BA1A1A;
+}
+
+@layer base {
+  html, body {
+    background: #F4F7F6;
+    color: var(--on-surface);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  * {
+    border-color: var(--outline-variant);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: #FFFFFF;
+    border: 1px solid var(--outline-variant);
+  }
+
+  .glass-panel {
+    background: #F4F7F6;
+    border: 1px solid var(--outline-variant);
+  }
+
+  .neon-glow {
+    box-shadow: none;
+  }
+  .neon-glow:hover {
+    box-shadow: none;
+  }
+
+  .ps-input {
+    width: 100%;
+    background: #FFFFFF;
+    border: 1px solid var(--outline-variant);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: var(--on-surface);
+    transition: all 0.2s ease;
+  }
+  .ps-input::placeholder { color: rgba(18, 42, 37, 0.4); }
+  .ps-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+
+  .ps-label {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--on-surface-variant);
+  }
+
+  .ps-btn-primary {
+    width: 100%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 13px;
+    padding: 0.95rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: none;
+  }
+  .ps-btn-primary:hover { filter: brightness(0.9); cursor: pointer; }
+  .ps-btn-primary:active { transform: scale(0.98); }
+  .ps-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .ps-btn-ghost {
+    width: 100%;
+    background: transparent;
+    color: var(--on-surface-variant);
+    border: 1px solid var(--outline-variant);
+    border-radius: 0.5rem;
+    padding: 0.7rem 1rem;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .ps-btn-ghost:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-container); }
+
+  .otp-input {
+    width: 3rem;
+    height: 4rem;
+    background: #FFFFFF;
+    border: 1px solid var(--outline-variant);
+    border-radius: 0.5rem;
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+    transition: all 0.2s ease;
+  }
+  .otp-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 5px rgba(15, 110, 86, 0.3);
+  }
+
+  .status-pulse {
+    animation: ps-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+}
+
+@keyframes ps-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

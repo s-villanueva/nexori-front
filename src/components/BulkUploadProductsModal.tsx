@@ -151,7 +151,7 @@ const handleUpload = async () => {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-400">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <span className="material-symbols-outlined">upload_file</span>
             </span>
             <div>
@@ -179,11 +179,11 @@ const handleUpload = async () => {
               onClick={() => inputRef.current?.click()}
               className={`flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed px-6 py-12 text-center cursor-pointer transition ${
                 dragging
-                  ? "border-cyan-400 bg-cyan-400/5"
-                  : "border-white/10 bg-surface-container-low hover:border-cyan-400/40 hover:bg-surface-container-high/30"
+                  ? "border-primary bg-primary/5"
+                  : "border-white/10 bg-surface-container-low hover:border-primary/40 hover:bg-surface-container-high/30"
               }`}
             >
-              <span className={`material-symbols-outlined text-5xl transition ${dragging ? "text-cyan-400" : "text-on-surface-variant"}`}>
+              <span className={`material-symbols-outlined text-5xl transition ${dragging ? "text-primary" : "text-on-surface-variant"}`}>
                 cloud_upload
               </span>
               <div>
@@ -191,7 +191,7 @@ const handleUpload = async () => {
                   {dragging ? "Suelta el archivo aquí" : "Arrastra tu archivo aquí"}
                 </p>
                 <p className="text-xs text-on-surface-variant mt-1">
-                  o <span className="text-cyan-400 font-semibold underline underline-offset-2">haz clic para seleccionar</span>
+                  o <span className="text-primary font-semibold underline underline-offset-2">haz clic para seleccionar</span>
                 </p>
                 <p className="text-xs text-on-surface-variant mt-3">
                   Formatos aceptados: <span className="font-mono text-on-surface">.csv</span>, <span className="font-mono text-on-surface">.xlsx</span>
@@ -221,7 +221,7 @@ const handleUpload = async () => {
               {/* Info del archivo */}
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface-container-low px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-cyan-400">description</span>
+                  <span className="material-symbols-outlined text-primary">description</span>
                   <div>
                     <p className="text-sm font-semibold text-on-surface">{file.name}</p>
                     <p className="text-xs text-on-surface-variant">
@@ -308,7 +308,7 @@ const handleUpload = async () => {
             <button
               onClick={handleUpload}
               disabled={!file || !!parseError || uploadState === "uploading" || uploadState === "success"}
-              className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-40 disabled:pointer-events-none"
+              className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
             >
               {uploadState === "uploading" ? (
                 <>

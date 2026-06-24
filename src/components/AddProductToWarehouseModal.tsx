@@ -174,7 +174,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
               <select
                 value={form.idAlmacen}
                 onChange={(e) => setForm({ ...form, idAlmacen: e.target.value })}
-                className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+                className="w-full rounded-xl bg-white px-4 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
                 required
               >
                 {warehouses.map((w, idx) => {
@@ -196,7 +196,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
               <select
                 value={form.idProducto}
                 onChange={(e) => setForm({ ...form, idProducto: e.target.value })}
-                className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+                className="w-full rounded-xl bg-white px-4 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
                 required
               >
                 {products.map((p, idx) => {
@@ -221,7 +221,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
                 placeholder="Ej: 50"
                 value={form.stock}
                 onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-primary transition"
+                className="w-full rounded-xl bg-white px-4 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
                 required
               />
             </div>
@@ -239,7 +239,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
                   placeholder="Ej: 5"
                   value={form.min}
                   onChange={(e) => setForm({ ...form, min: e.target.value })}
-                  className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-primary transition"
+                  className="w-full rounded-xl bg-white px-4 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
                 />
               </div>
               <div className="space-y-1.5">
@@ -253,7 +253,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
                   placeholder="Ej: 500"
                   value={form.max}
                   onChange={(e) => setForm({ ...form, max: e.target.value })}
-                  className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-primary transition"
+                  className="w-full rounded-xl bg-white px-4 py-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
                 />
               </div>
             </div>
@@ -265,7 +265,7 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
                 id="activo"
                 checked={form.activo}
                 onChange={(e) => setForm({ ...form, activo: e.target.checked })}
-                className="h-4.5 w-4.5 rounded border-outline/20 accent-primary text-primary"
+                className="h-4.5 w-4.5 rounded border-white/10 accent-primary text-on-primary"
               />
               <label htmlFor="activo" className="text-xs font-semibold text-on-surface select-none">
                 Establecer como activo
@@ -273,18 +273,18 @@ export function AddProductToWarehouseModal({ onClose, onSuccess }: Props) {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-3 border-t border-outline/5 pt-4">
+            <div className="flex justify-end gap-3 border-t border-white/5 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-outline/10 px-5 py-3 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition"
+                className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-on-surface-variant hover:text-on-surface transition"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={loading || warehouses.length === 0 || products.length === 0}
-                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-on-primary hover:brightness-115 transition disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm font-bold">
                   {loading ? "hourglass_empty" : "save"}

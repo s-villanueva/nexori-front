@@ -1196,8 +1196,8 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                     {/* Header */}
                     <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
                       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
-                          <span className="material-symbols-outlined text-4xl text-cyan-400 font-bold">account_circle</span>
+                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-secondary/20 to-primary/20 border border-white/10">
+                          <span className="material-symbols-outlined text-4xl text-primary font-bold">account_circle</span>
                         </div>
                         <div className="flex-1">
                           <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
@@ -1341,7 +1341,7 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                           <button
                             onClick={handleVerify2FA}
                             disabled={totpVerifying || totpCode.length !== 6}
-                            className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-50 cursor-pointer"
+                            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-sm">
                               {totpVerifying ? "hourglass_empty" : "verified"}

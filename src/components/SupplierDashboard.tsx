@@ -6,6 +6,7 @@ import { BulkUploadProductsModal } from "./BulkUploadProductsModal";
 import { CreateWarehouseModal } from "./CreateWarehouseModal";
 import { CreateContractModal } from "./CreateContractModal";
 import { AddProductToWarehouseModal } from "./AddProductToWarehouseModal";
+import { CreateCategoryModal } from "./CreateCategoryModal";
 import { toast } from "sonner";
 
 
@@ -30,6 +31,7 @@ export function SupplierDashboard({ userEmail, onSignOut }: { userEmail: string;
   const [active, setActive] = useState("dashboard");
   const [showCreateWarehouse, setShowCreateWarehouse] = useState(false);
   const [showAddProductToWarehouse, setShowAddProductToWarehouse] = useState(false);
+  const [showCreateCategory, setShowCreateCategory] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -402,7 +404,7 @@ const handleVerify2FA = async () => {
                 <div className="rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between min-h-[130px]">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Stock Disponible</p>
-                    <span className="material-symbols-outlined text-cyan-400 text-xl">inventory_2</span>
+                    <span className="material-symbols-outlined text-primary text-xl">inventory_2</span>
                   </div>
                   <div className="mt-4 flex items-baseline justify-between">
                     <p className="text-2xl font-bold text-on-surface">{stats.availableStock.toLocaleString()} unidades</p>
@@ -437,7 +439,7 @@ const handleVerify2FA = async () => {
                       <span className="material-symbols-outlined text-xl text-on-surface-variant">history</span>
                       <h3 className="text-base font-semibold">Recent Activity</h3>
                     </div>
-                    <button className="text-xs font-bold text-cyan-400 uppercase tracking-wider hover:underline">
+                    <button className="text-xs font-bold text-primary uppercase tracking-wider hover:underline">
                       View Full Log
                     </button>
                   </div>
@@ -451,7 +453,7 @@ const handleVerify2FA = async () => {
                         <div>
                           <p className="text-sm font-semibold text-on-surface">Order #PS-9842 Completed</p>
                           <p className="text-xs text-on-surface-variant mt-0.5">
-                            Payment of <span className="text-cyan-400 font-medium">$12,400.00</span> processed via Smart Contract.
+                            Payment of <span className="text-primary font-medium">$12,400.00</span> processed via Smart Contract.
                           </p>
                           <span className="inline-block font-mono text-[10px] bg-neutral-900 border border-white/5 text-emerald-400 px-2 py-0.5 rounded mt-2">
                             TX_HASH: 0x4f...e92a
@@ -477,7 +479,7 @@ const handleVerify2FA = async () => {
                     </div>
 
                     <div className="relative">
-                      <span className="absolute -left-[35px] top-0 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 ring-4 ring-surface-container-low">
+                      <span className="absolute -left-[35px] top-0 flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary ring-4 ring-surface-container-low">
                         <span className="material-symbols-outlined text-sm">local_shipping</span>
                       </span>
                       <div className="flex items-start justify-between gap-4">
@@ -497,28 +499,28 @@ const handleVerify2FA = async () => {
                   <h3 className="text-base font-semibold text-on-surface">Quick Actions</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <button className="flex flex-col items-center justify-center p-4 rounded-2xl border border-white/5 bg-surface-container-high/40 hover:bg-surface-container-high transition group text-center gap-2">
-                      <span className="material-symbols-outlined text-2xl text-cyan-400 group-hover:scale-105 transition">
+                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-105 transition">
                         add_box
                       </span>
                       <span className="text-xs font-semibold text-on-surface">Nuevo SKU</span>
                     </button>
 
                     <button className="flex flex-col items-center justify-center p-4 rounded-2xl border border-white/5 bg-surface-container-high/40 hover:bg-surface-container-high transition group text-center gap-2">
-                      <span className="material-symbols-outlined text-2xl text-cyan-400 group-hover:scale-105 transition">
+                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-105 transition">
                         layers
                       </span>
                       <span className="text-xs font-semibold text-on-surface">Nueva Regla</span>
                     </button>
 
                     <button className="flex flex-col items-center justify-center p-4 rounded-2xl border border-white/5 bg-surface-container-high/40 hover:bg-surface-container-high transition group text-center gap-2">
-                      <span className="material-symbols-outlined text-2xl text-cyan-400 group-hover:scale-105 transition">
+                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-105 transition">
                         history_edu
                       </span>
                       <span className="text-xs font-semibold text-on-surface">Nuevo Contrato</span>
                     </button>
 
                     <button className="flex flex-col items-center justify-center p-4 rounded-2xl border border-white/5 bg-surface-container-high/40 hover:bg-surface-container-high transition group text-center gap-2">
-                      <span className="material-symbols-outlined text-2xl text-cyan-400 group-hover:scale-105 transition">
+                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-105 transition">
                         upload_file
                       </span>
                       <span className="text-xs font-semibold text-on-surface">Cargar Tarifas</span>
@@ -641,7 +643,7 @@ const handleVerify2FA = async () => {
                         onClick={() => setOrdersPage(pageIdx)}
                         className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition ${
                           ordersPage === pageIdx
-                            ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-400"
+                            ? "border-primary/30 bg-primary/10 text-primary"
                             : "border-white/5 bg-surface-container-high/20 text-on-surface-variant hover:bg-white/5"
                         }`}
                       >
@@ -775,7 +777,7 @@ const handleVerify2FA = async () => {
                   <div className="flex items-center gap-6 rounded-2xl border border-white/10 bg-surface-container-high px-5 py-2.5">
                     <div className="text-right">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Contratos Activos</p>
-                      <p className="text-xl font-bold text-cyan-400">12</p>
+                      <p className="text-xl font-bold text-primary">12</p>
                     </div>
                     <div className="h-6 w-px bg-white/10" />
                     <div className="text-right">
@@ -783,7 +785,7 @@ const handleVerify2FA = async () => {
                       <p className="text-xl font-bold text-emerald-400">14.5%</p>
                     </div>
                   </div>
-                  <button onClick={() => setShowCreateContract(true)} className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300">
+                  <button onClick={() => setShowCreateContract(true)} className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90">
                     <span className="material-symbols-outlined text-sm font-bold">add</span>
                     Registrar nuevo contrato
                   </button>
@@ -864,7 +866,7 @@ const handleVerify2FA = async () => {
                     >
                       <span className="material-symbols-outlined text-base">chevron_left</span>
                     </button>
-                    <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10 text-xs font-semibold text-cyan-400">
+                    <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-xs font-semibold text-primary">
                       {contractsPage + 1}
                     </button>
                     <button 
@@ -958,8 +960,8 @@ const handleVerify2FA = async () => {
         {/* Header */}
         <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
-              <span className="material-symbols-outlined text-4xl text-cyan-400">account_circle</span>
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-secondary/20 to-primary/20 border border-white/10">
+              <span className="material-symbols-outlined text-4xl text-primary">account_circle</span>
             </div>
             <div className="flex-1">
               <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
@@ -1104,7 +1106,7 @@ const handleVerify2FA = async () => {
               <button
                 onClick={handleVerify2FA}
                 disabled={totpVerifying || totpCode.length !== 6}
-                className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm">
                   {totpVerifying ? "hourglass_empty" : "verified"}
@@ -1142,7 +1144,7 @@ const handleVerify2FA = async () => {
                 {!showCreateRule && (
                   <button
                     onClick={() => setShowCreateRule(true)}
-                    className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300"
+                    className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90"
                   >
                     <span className="material-symbols-outlined text-sm font-bold">add</span>Crear nueva regla
                   </button>
@@ -1251,13 +1253,13 @@ const handleVerify2FA = async () => {
 
                   <div className="pt-4 space-y-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-cyan-400">
+                      <div className="flex items-center gap-2 text-primary">
                         <span className="material-symbols-outlined font-bold">layers</span>
                         <h3 className="text-lg font-semibold text-on-surface">Tramos</h3>
                       </div>
                       <button
                         onClick={handleAddTramo}
-                        className="flex items-center gap-1 rounded-xl border border-cyan-400/30 bg-cyan-400/5 px-4 py-2 text-xs font-bold uppercase tracking-wider text-cyan-400 transition hover:bg-cyan-400/10"
+                        className="flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary transition hover:bg-primary/10"
                       >
                         <span className="material-symbols-outlined text-sm font-bold">add</span>Agregar tramo
                       </button>
@@ -1340,7 +1342,7 @@ const handleVerify2FA = async () => {
                     <button
                       onClick={handleSaveRule}
                       disabled={savingRule}
-                      className="flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined text-sm font-bold">
                         {savingRule ? "hourglass_empty" : "save"}
@@ -1362,14 +1364,20 @@ const handleVerify2FA = async () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
+                    onClick={() => setShowCreateCategory(true)}
+                    className="flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-primary transition hover:bg-primary/20"
+                  >
+                    <span className="material-symbols-outlined text-sm">folder</span>Crear Categoría
+                  </button>
+                  <button
                     onClick={() => setShowBulkUpload(true)}
-                    className="flex items-center gap-2 rounded-2xl border border-white/10 bg-surface-container-high/40 px-4 py-3 text-xs font-bold uppercase tracking-wider text-cyan-400 transition hover:bg-white/5"
+                    className="flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-primary transition hover:bg-primary/20"
                   >
                     <span className="material-symbols-outlined text-sm">upload_file</span>Carga masiva
                   </button>
                   <button
                     onClick={() => setShowCreateProduct(true)}
-                    className="rounded-2xl bg-primary px-5 py-3 font-semibold text-on-primary transition hover:opacity-90"
+                    className="rounded-2xl bg-primary px-5 py-3 font-semibold text-on-primary transition hover:opacity-90 text-sm"
                   >
                     Crear Producto
                   </button>
@@ -1380,7 +1388,7 @@ const handleVerify2FA = async () => {
                 <div className="rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between min-h-[140px]">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Total SKU</p>
-                    <span className="material-symbols-outlined text-cyan-400 text-xl">archive</span>
+                    <span className="material-symbols-outlined text-primary text-xl">archive</span>
                   </div>
                   <div className="mt-4">
                     <p className="text-2xl font-bold text-on-surface">{productsTotalElements}</p>
@@ -1418,10 +1426,10 @@ const handleVerify2FA = async () => {
                       ) : (
                         dbProducts.map((product, idx) => (
                           <tr key={product.id || idx} className="group hover:bg-white/[0.01]">
-                            <td className="py-5 pr-6 font-mono text-xs text-cyan-400 font-semibold">{product.sku || "—"}</td>
+                            <td className="py-5 pr-6 font-mono text-xs text-primary font-semibold">{product.sku || "—"}</td>
                             <td className="py-5 pr-6">
                               <div className="flex items-center gap-3">
-                                <span className="w-1.5 h-2.5 rounded-sm shrink-0 bg-cyan-400" />
+                                <span className="w-1.5 h-2.5 rounded-sm shrink-0 bg-primary" />
                                 <span className="font-semibold text-on-surface">{product.nombre || "—"}</span>
                               </div>
                             </td>
@@ -1440,7 +1448,7 @@ const handleVerify2FA = async () => {
                             </td>
                             <td className="py-5 text-center">
                               <div className="flex items-center justify-center gap-3 text-on-surface-variant">
-                                <button className="transition hover:text-cyan-400">
+                                <button className="transition hover:text-primary">
                                   <span className="material-symbols-outlined text-lg">edit</span>
                                 </button>
                                 <button className="transition hover:text-red-400">
@@ -1472,7 +1480,7 @@ const handleVerify2FA = async () => {
                         onClick={() => setProductsPage(pageIdx)}
                         className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition ${
                           productsPage === pageIdx
-                            ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-400"
+                            ? "border-primary/30 bg-primary/10 text-primary"
                             : "border-white/5 bg-surface-container-high/20 text-on-surface-variant hover:bg-white/5"
                         }`}
                       >
@@ -1515,6 +1523,14 @@ const handleVerify2FA = async () => {
                         }
                       })
                       .catch(console.error);
+                  }}
+                />
+              )}
+              {showCreateCategory && (
+                <CreateCategoryModal
+                  onClose={() => setShowCreateCategory(false)}
+                  onSuccess={() => {
+                    // Refrescar categorías si fuera necesario
                   }}
                 />
               )}

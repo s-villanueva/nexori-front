@@ -113,7 +113,7 @@ export function CreateWarehouseModal({ onClose, onSuccess }: Props) {
         {/* Info */}
         <p className="rounded-xl border border-white/5 bg-surface-container-high/40 px-4 py-3 text-xs text-on-surface-variant">
           <span className="material-symbols-outlined mr-1 align-middle text-sm">info</span>
-          <code className="text-cyan-400">id_empresa</code> y <code className="text-cyan-400">activo: true</code> se adjuntan automáticamente desde la sesión.
+          <code className="text-primary font-semibold">id_empresa</code> y <code className="text-primary font-semibold">activo: true</code> se adjuntan automáticamente desde la sesión.
         </p>
 
         {/* Acciones */}
@@ -124,7 +124,7 @@ export function CreateWarehouseModal({ onClose, onSuccess }: Props) {
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-sm font-bold">
               {loading ? "hourglass_empty" : "warehouse"}

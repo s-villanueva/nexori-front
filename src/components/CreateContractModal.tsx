@@ -349,7 +349,7 @@ export function CreateContractModal({ onClose, onSuccess }: Props) {
 
         {/* Detalle Section (Add item subform) */}
         <div className="border-t border-white/5 pt-4 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-cyan-400">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-primary">
             Detalle de Productos
           </h3>
 
@@ -404,7 +404,7 @@ export function CreateContractModal({ onClose, onSuccess }: Props) {
             <button
               type="button"
               onClick={handleAddProduct}
-              className="flex items-center gap-1.5 rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300"
+              className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90"
             >
               <span className="material-symbols-outlined text-sm font-bold">add</span>
               Agregar
@@ -458,7 +458,7 @@ export function CreateContractModal({ onClose, onSuccess }: Props) {
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-sm font-bold">
               {loading ? "hourglass_empty" : "description"}

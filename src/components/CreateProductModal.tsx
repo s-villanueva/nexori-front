@@ -168,7 +168,7 @@ export function CreateProductModal({ onClose, onSuccess }: Props) {
             type="button"
             onClick={() => setForm({ ...form, activo: !form.activo })}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-              form.activo ? "bg-cyan-400" : "bg-white/20"
+              form.activo ? "bg-primary" : "bg-white/20"
             }`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
@@ -188,7 +188,7 @@ export function CreateProductModal({ onClose, onSuccess }: Props) {
           <button
             onClick={handleSubmit}
             disabled={loading || !form.sku || !form.nombre || !form.idCategoria}
-            className="flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 transition hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-on-primary transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <span className="material-symbols-outlined text-sm font-bold">
               {loading ? "hourglass_empty" : "add_box"}

@@ -1,4 +1,4 @@
-const BASE: string = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8080';
+const BASE: string = (import.meta.env.VITE_API_URL as string) ;
 
 function getToken(): string | null {
   return localStorage.getItem('b2b_token');

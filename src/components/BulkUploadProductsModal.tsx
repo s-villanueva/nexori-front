@@ -112,7 +112,7 @@ const handleUpload = async () => {
 
     const token = localStorage.getItem("b2b_token"); // ajusta según donde guardas el token
     const response = await fetch(
-      `${"http://localhost:8080"}/api/v1/products/bulk-upload?idEmpresa=${idEmpresa}`,
+      `${import.meta.env.VITE_API_URL}/api/v1/products/bulk-upload?idEmpresa=${idEmpresa}`,
       {
         method: "POST",
         body: formData,

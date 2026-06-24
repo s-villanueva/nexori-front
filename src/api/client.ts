@@ -9,7 +9,9 @@ interface RequestOptions extends Omit<RequestInit, 'headers'> {
 }
 
 async function request<T = any>(path: string, options: RequestOptions = {}): Promise<T | null> {
-  const token = getToken();
+  const token =
+  
+  getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -5,6 +5,7 @@ import { CreateProductModal } from "./CreateProductModal";
 import { BulkUploadProductsModal } from "./BulkUploadProductsModal";
 import { CreateWarehouseModal } from "./CreateWarehouseModal";
 import { CreateContractModal } from "./CreateContractModal";
+import { AddProductToWarehouseModal } from "./AddProductToWarehouseModal";
 import { toast } from "sonner";
 
 
@@ -14,7 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "orders", label: "Mis órdenes", icon: "receipt_long" },
   { key: "stock", label: "Stock", icon: "inventory_2" },
   { key: "contracts", label: "Contratos", icon: "description" },
-  { key: "products", label: "Products", icon: "shopping_bag" },
+  { key: "products", label: "Productos", icon: "shopping_bag" },
   { key: "rules", label: "Reglas de Comisión", icon: "rule" },
 //   { key: "pricing", label: "Precios", icon: "payments" },
   { key: "account", label: "Mi cuenta", icon: "account_circle" },
@@ -28,8 +29,77 @@ export function SupplierDashboard({ userEmail, onSignOut }: { userEmail: string;
   const { user } = useAuth();
   const [active, setActive] = useState("dashboard");
   const [showCreateWarehouse, setShowCreateWarehouse] = useState(false);
+  const [showAddProductToWarehouse, setShowAddProductToWarehouse] = useState(false);
 
   const [loading, setLoading] = useState(false);
+
+  // States for updating account profile
+  const [editing, setEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    nombre: "",
+    email: "",
+    password: "",
+    activo: true,
+    idEmpresa: "",
+    idSucursal: "",
+    idRol: ""
+  });
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [skuCount, setSkuCount] = useState(0);
+
+  const startEditing = async () => {
+    try {
+      if (!user?.id) return;
+      const params = new URLSearchParams({ uId: user.id }).toString();
+      const rawUser = await api.get(`/api/v1/usuarios/user-info?${params}`);
+      if (rawUser) {
+        setProfileForm({
+          nombre: rawUser.nombre || "",
+          email: rawUser.email || "",
+          password: "",
+          activo: rawUser.activo ?? true,
+          idEmpresa: rawUser.idEmpresa?.id || null,
+          idSucursal: rawUser.idSucursal?.id || null,
+          idRol: rawUser.idRol?.id || null
+        });
+        setEditing(true);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cargar la información detallada del usuario.");
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    setUpdatingProfile(true);
+    try {
+      const payload: any = {
+        nombre: profileForm.nombre,
+        email: profileForm.email,
+        activo: profileForm.activo,
+        idEmpresa: profileForm.idEmpresa,
+        idSucursal: profileForm.idSucursal,
+        idRol: profileForm.idRol
+      };
+      if (profileForm.password) {
+        payload.password = profileForm.password;
+      }
+      
+      await api.put(`/api/v1/usuarios/${user.id}`, payload);
+      toast.success("¡Perfil actualizado con éxito! Recargando sesión...");
+      setEditing(false);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al actualizar la información del perfil.");
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
 
   // API states
   const [stats, setStats] = useState({ activeOrders: 0, availableStock: 0, openContracts: 0 });
@@ -110,6 +180,14 @@ const [totpError, setTotpError] = useState<string | null>(null);
           try {
             const res = await api.get(`/api/v1/almacenes/mostrar?idEmpresa=${idEmpresa}`);
             if (res) setDbStock(res);
+
+            // Cargar el conteo de SKUs/productos del proveedor
+            const prodRes = await api.get(`/api/v1/products/all?idEmpresa=${idEmpresa}&page=0&size=1`);
+            if (prodRes && prodRes.totalElements !== undefined) {
+              setSkuCount(prodRes.totalElements);
+            } else if (Array.isArray(prodRes)) {
+              setSkuCount(prodRes.length);
+            }
           } catch (e) { console.error(e); }
         }
 
@@ -323,17 +401,17 @@ const handleVerify2FA = async () => {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between min-h-[130px]">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Available Stock</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Stock Disponible</p>
                     <span className="material-symbols-outlined text-cyan-400 text-xl">inventory_2</span>
                   </div>
                   <div className="mt-4 flex items-baseline justify-between">
-                    <p className="text-2xl font-bold text-on-surface">{stats.availableStock.toLocaleString()} units</p>
+                    <p className="text-2xl font-bold text-on-surface">{stats.availableStock.toLocaleString()} unidades</p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between min-h-[130px]">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Active Orders</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Órdenes Activas</p>
                     <span className="material-symbols-outlined text-purple-400 text-xl">shopping_cart</span>
                   </div>
                   <div className="mt-4 flex items-baseline justify-between">
@@ -343,7 +421,7 @@ const handleVerify2FA = async () => {
 
                 <div className="rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between min-h-[130px]">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Open Contracts</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Contratos Abiertos</p>
                     <span className="material-symbols-outlined text-orange-400 text-xl">description</span>
                   </div>
                   <div className="mt-4 flex items-baseline justify-between">
@@ -591,19 +669,27 @@ const handleVerify2FA = async () => {
                   <h2 className="text-3xl font-semibold text-on-surface">Gestión de Almacenes</h2>
                   <p className="text-sm text-on-surface-variant mt-1">Monitorea stock y alertas por almacén</p>
                 </div>
-                <button
-                  onClick={() => setShowCreateWarehouse(true)}
-                  className="rounded-2xl bg-primary px-5 py-3 font-semibold text-on-primary transition hover:opacity-90"
-                >
-                  + Registrar nuevo almacén
-                </button>
+                 <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowAddProductToWarehouse(true)}
+                    className="rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 font-semibold text-primary transition hover:bg-primary/20 text-sm"
+                  >
+                    + Asociar producto a almacén
+                  </button>
+                  <button
+                    onClick={() => setShowCreateWarehouse(true)}
+                    className="rounded-2xl bg-primary px-5 py-3 font-semibold text-on-primary transition hover:opacity-90 text-sm"
+                  >
+                    + Registrar nuevo almacén
+                  </button>
+                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
                 {[
-                  { title: "Total Warehouses", value: "12", accent: "+2 esta semana" },
-                  { title: "Total SKUs", value: "1,452", accent: "Optimizado" },
-                  { title: "Low Stock Alerts", value: "24", accent: "Crítico" },
+                  { title: "Total de Almacenes", value: dbStock.length.toString(), accent: "Activos" },
+                  { title: "Total de Productos (SKUs)", value: skuCount.toString(), accent: "En catálogo" },
+                  { title: "Alertas de Stock Bajo", value: "0", accent: "Correcto" },
                 ].map((card) => (
                   <div key={card.title} className="rounded-3xl border border-white/10 bg-surface-container-low p-6">
                     <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">{card.title}</p>
@@ -658,6 +744,17 @@ const handleVerify2FA = async () => {
                   onClose={() => setShowCreateWarehouse(false)}
                   onSuccess={() => {
                     setShowCreateWarehouse(false);
+                    api.get(`/api/v1/proveedores/${providerId}/stock`)
+                      .then((res) => { if (res) setDbStock(res); })
+                      .catch(console.error);
+                  }}
+                />
+              )}
+              {showAddProductToWarehouse && (
+                <AddProductToWarehouseModal
+                  onClose={() => setShowAddProductToWarehouse(false)}
+                  onSuccess={() => {
+                    toast.success("Producto asociado al almacén correctamente.");
                     api.get(`/api/v1/proveedores/${providerId}/stock`)
                       .then((res) => { if (res) setDbStock(res); })
                       .catch(console.error);
@@ -725,8 +822,21 @@ const handleVerify2FA = async () => {
                         <tr key={index} className="group hover:bg-white/[0.01]">
                           <td className="py-4 pr-6 text-on-surface font-semibold">{contract.idContrato || contract.id}</td>
                           <td className="py-4 pr-6 text-on-surface-variant">{contract.nombreProveedor || "Proveedor"}</td>
-                          <td className="py-4 pr-6 text-on-surface-variant">{contract.validez || "—"}</td>
-                          <td className="py-4 pr-6 text-emerald-400 font-bold">{contract.descuento !== undefined ? `${contract.descuento}%` : "—"}</td>
+                          <td className="py-4 pr-6 text-on-surface-variant">
+                            {contract.vigenteDesde ? (
+                              `${new Date(contract.vigenteDesde).toLocaleDateString()} - ${contract.vigenteHasta ? new Date(contract.vigenteHasta).toLocaleDateString() : "Indefinido"}`
+                            ) : (
+                              contract.validez || "—"
+                            )}
+                          </td>
+                          <td className="py-4 pr-6 text-emerald-400 font-bold">
+                            {(() => {
+                              const descVal = contract.porcentajeDescuento !== undefined && contract.porcentajeDescuento !== null
+                                ? contract.porcentajeDescuento
+                                : contract.descuento;
+                              return descVal !== undefined && descVal !== null ? `${descVal}%` : "—";
+                            })()}
+                          </td>
                           <td className="py-4 pr-6">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wider text-emerald-400">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -784,32 +894,101 @@ const handleVerify2FA = async () => {
 
 {active === "account" && (
   <section className="space-y-6">
-    {/* Header */}
-    <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
-          <span className="material-symbols-outlined text-4xl text-cyan-400">account_circle</span>
+    {editing ? (
+      <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8 space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-on-surface">Editar Información de Cuenta</h2>
+          <p className="text-sm text-on-surface-variant mt-1">Actualiza tus datos personales de acceso.</p>
         </div>
-        <div className="flex-1">
-          <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
-          <h1 className="mt-1 text-3xl font-semibold text-on-surface">{user?.nombre ?? "—"}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <span className="material-symbols-outlined text-sm">verified_user</span>
-              {user?.role ?? "Sin rol"}
-            </span>
-            {user?.activo !== undefined && (
-              <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                user.activo ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
-              }`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                {user.activo ? "Cuenta activa" : "Cuenta inactiva"}
-              </span>
-            )}
+        
+        <form onSubmit={handleUpdateProfile} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre Completo</label>
+            <input
+              type="text"
+              required
+              value={profileForm.nombre}
+              onChange={(e) => setProfileForm({ ...profileForm, nombre: e.target.value })}
+              className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Correo Electrónico</label>
+            <input
+              type="email"
+              required
+              value={profileForm.email}
+              onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+              className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nueva Contraseña</label>
+            <input
+              type="password"
+              placeholder="Dejar en blanco para no modificar"
+              value={profileForm.password}
+              onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+              className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+            />
+          </div>
+
+          <div className="flex gap-4 pt-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="flex-1 rounded-xl border border-outline/10 py-3 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={updatingProfile}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-xs font-bold uppercase tracking-wider text-on-primary hover:brightness-110 transition disabled:opacity-50"
+            >
+              {updatingProfile ? "Guardando..." : "Guardar Cambios"}
+            </button>
+          </div>
+        </form>
+      </div>
+    ) : (
+      <>
+        {/* Header */}
+        <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
+              <span className="material-symbols-outlined text-4xl text-cyan-400">account_circle</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
+              <h1 className="mt-1 text-3xl font-semibold text-on-surface">{user?.nombre ?? "—"}</h1>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                  <span className="material-symbols-outlined text-sm">verified_user</span>
+                  {user?.role ?? "Sin rol"}
+                </span>
+                {user?.activo !== undefined && (
+                  <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                    user.activo ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+                  }`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {user.activo ? "Cuenta activa" : "Cuenta inactiva"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={startEditing}
+              className="rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 font-semibold text-primary transition hover:bg-primary/20 text-xs uppercase tracking-wider"
+            >
+              Editar Datos
+            </button>
           </div>
         </div>
-      </div>
-    </div>
+      </>
+    )}
 
     {/* Info grid */}
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

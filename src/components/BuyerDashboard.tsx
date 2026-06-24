@@ -32,13 +32,96 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
   const { user } = useAuth();
   const [active, setActive] = useState<NavKey>("dashboard");
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [selectedOrderIdForPay, setSelectedOrderIdForPay] = useState<string | null>(null);
+  const [selectedInvoiceForPay, setSelectedInvoiceForPay] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // States for updating account profile
+  const [editing, setEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    nombre: "",
+    email: "",
+    password: "",
+    activo: true,
+    idEmpresa: "",
+    idSucursal: "",
+    idRol: ""
+  });
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+
+  const startEditing = async () => {
+    try {
+      if (!user?.id) return;
+      const params = new URLSearchParams({ uId: user.id }).toString();
+      const rawUser = await api.get(`/api/v1/usuarios/user-info?${params}`);
+      if (rawUser) {
+        setProfileForm({
+          nombre: rawUser.nombre || "",
+          email: rawUser.email || "",
+          password: "",
+          activo: rawUser.activo ?? true,
+          idEmpresa: rawUser.idEmpresa?.id || null,
+          idSucursal: rawUser.idSucursal?.id || null,
+          idRol: rawUser.idRol?.id || null
+        });
+        setEditing(true);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cargar la información detallada del usuario.");
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    setUpdatingProfile(true);
+    try {
+      const payload: any = {
+        nombre: profileForm.nombre,
+        email: profileForm.email,
+        activo: profileForm.activo,
+        idEmpresa: profileForm.idEmpresa,
+        idSucursal: profileForm.idSucursal,
+        idRol: profileForm.idRol
+      };
+      if (profileForm.password) {
+        payload.password = profileForm.password;
+      }
+      
+      await api.put(`/api/v1/usuarios/${user.id}`, payload);
+      toast.success("¡Perfil actualizado con éxito! Recargando sesión...");
+      setEditing(false);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al actualizar la información del perfil.");
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
 
   // Estado para controlar la visibilidad del modal de contratos
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   // Estado para controlar la visibilidad del modal de órdenes
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+
+  // Pagination and API States
+  const [ordersPage, setOrdersPage] = useState(0);
+  const [ordersTotalPages, setOrdersTotalPages] = useState(1);
+  const [ordersTotalElements, setOrdersTotalElements] = useState(0);
+  const ordersSize = 10;
+
+  const [invoicesPage, setInvoicesPage] = useState(0);
+  const [invoicesTotalPages, setInvoicesTotalPages] = useState(1);
+  const [invoicesTotalElements, setInvoicesTotalElements] = useState(0);
+  const invoicesSize = 10;
+
+  const [contractsPage, setContractsPage] = useState(0);
+  const [contractsTotalPages, setContractsTotalPages] = useState(1);
+  const [contractsTotalElements, setContractsTotalElements] = useState(0);
+  const contractsSize = 10;
 
   // API Stats
   const [orderStats, setOrderStats] = useState({ ordenesTotales: 0, pendientes: 0, gastoMensual: 0 });
@@ -76,8 +159,12 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           } catch (e) { console.error(e); }
 
           try {
-            const res = await api.get(`/api/v1/ordenes-compra/buyer?idEmpresa=${companyId}&size=10&page=0`);
-            if (res?.content) setDbOrders(res.content);
+            const res = await api.get(`/api/v1/ordenes-compra/buyer?idEmpresa=${companyId}&size=${ordersSize}&page=${ordersPage}`);
+            if (res) {
+              setDbOrders(Array.isArray(res) ? res : res.content || []);
+              setOrdersTotalPages(res.totalPages ?? 1);
+              setOrdersTotalElements(res.totalElements ?? (Array.isArray(res) ? res.length : 0));
+            }
           } catch (e) { console.error(e); }
         }
 
@@ -88,8 +175,12 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           } catch (e) { console.error(e); }
 
           try {
-            const res = await api.get(`/api/v1/facturas?idEmpresa=${companyId}&size=10&page=0`);
-            if (res?.content) setDbInvoices(res.content);
+            const res = await api.get(`/api/v1/facturas?idEmpresa=${companyId}&size=${invoicesSize}&page=${invoicesPage}`);
+            if (res) {
+              setDbInvoices(Array.isArray(res) ? res : res.content || []);
+              setInvoicesTotalPages(res.totalPages ?? 1);
+              setInvoicesTotalElements(res.totalElements ?? (Array.isArray(res) ? res.length : 0));
+            }
           } catch (e) { console.error(e); }
         }
 
@@ -100,8 +191,12 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           } catch (e) { console.error(e); }
 
           try {
-            const res = await api.get(`/api/v1/contratos-detalle?idEmpresa=${companyId}&page=0&size=10`);
-            if (res?.content) setDbContracts(res.content);
+            const res = await api.get(`/api/v1/contratos-detalle?idEmpresa=${companyId}&page=${contractsPage}&size=${contractsSize}`);
+            if (res) {
+              setDbContracts(Array.isArray(res) ? res : res.content || []);
+              setContractsTotalPages(res.totalPages ?? 1);
+              setContractsTotalElements(res.totalElements ?? (Array.isArray(res) ? res.length : 0));
+            }
           } catch (e) { console.error(e); }
         }
 
@@ -119,7 +214,7 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
       }
     }
     fetchStatsAndData();
-  }, [active, companyId]);
+  }, [active, companyId, ordersPage, invoicesPage, contractsPage]);
 
   const handleContractSubmit = async (formData: any) => {
     try {
@@ -143,8 +238,12 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
       setIsContractModalOpen(false);
       
       // Forzar recarga de la lista de contratos
-      const res = await api.get(`/api/v1/contratos-detalle?idEmpresa=${companyId}&page=0&size=10`);
-      if (res?.content) setDbContracts(res.content);
+      const res = await api.get(`/api/v1/contratos-detalle?idEmpresa=${companyId}&page=${contractsPage}&size=${contractsSize}`);
+      if (res) {
+        setDbContracts(Array.isArray(res) ? res : res.content || []);
+        setContractsTotalPages(res.totalPages ?? 1);
+        setContractsTotalElements(res.totalElements ?? (Array.isArray(res) ? res.length : 0));
+      }
     } catch (error) {
       console.error("Error al crear el contrato:", error);
       alert("Ocurrió un error al guardar el contrato B2B.");
@@ -172,8 +271,12 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
     setIsOrderModalOpen(false);
 
     // Refrescar lista
-    const res = await api.get(`/api/v1/ordenes-compra/buyer?idEmpresa=${companyId}&size=10&page=0`);
-    if (res?.content) setDbOrders(res.content);
+    const res = await api.get(`/api/v1/ordenes-compra/buyer?idEmpresa=${companyId}&size=${ordersSize}&page=${ordersPage}`);
+    if (res) {
+      setDbOrders(Array.isArray(res) ? res : res.content || []);
+      setOrdersTotalPages(res.totalPages ?? 1);
+      setOrdersTotalElements(res.totalElements ?? (Array.isArray(res) ? res.length : 0));
+    }
   } catch (error) {
     console.error("Error al crear la orden:", error);
     alert("Ocurrió un error al guardar la orden.");
@@ -410,10 +513,8 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         {[
-                          { label: "Por pagar", value: "Bs 12.450", tone: "text-primary" },
-                          { label: "Pagadas hoy", value: "Bs 4.800", tone: "text-tertiary" },
-                          { label: "Vencidas", value: "Bs 1.100", tone: "text-error" },
-                          { label: "Tiempo medio", value: "4.2 dias", tone: "text-secondary" },
+                          { label: "Por pagar", value: `Bs ${invoiceStats.faltaPago.toLocaleString()}`, tone: "text-primary" },
+                          { label: "Pagadas hoy", value: `Bs ${invoiceStats.pagadoHoy.toLocaleString()}`, tone: "text-tertiary" },
                         ].map((s) => (
                           <div key={s.label} className="rounded-lg bg-surface p-3">
                             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide">{s.label}</p>
@@ -422,7 +523,7 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                         ))}
                       </div>
                     </div>
-
+ 
                     <div className="rounded-xl border border-white/10 bg-surface-container-low p-5 flex-1">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold text-on-surface text-sm">Contratos</h3>
@@ -431,61 +532,31 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                         </button>
                       </div>
                       <div className="space-y-2">
-                        {[
-                          { name: "Global Logistics Corp", status: "Activo", discount: "12.5%", dot: "bg-tertiary", tone: "text-tertiary" },
-                          { name: "NexGen Tech Supplies", status: "Activo", discount: "5.0%", dot: "bg-tertiary", tone: "text-tertiary" },
-                          { name: "EcoPrime Energy", status: "Pend. Firma", discount: "15.2%", dot: "bg-secondary", tone: "text-secondary" },
-                          { name: "Shield Solutions S.A.", status: "Expirado", discount: "10.0%", dot: "bg-error", tone: "text-error" },
-                        ].map((c) => (
-                          <div key={c.name} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2">
-                            <p className="text-xs font-bold text-on-surface truncate max-w-[120px]">{c.name}</p>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-bold text-primary">{c.discount}</span>
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${c.tone}`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-                                {c.status}
-                              </span>
-                            </div>
+                        {contractsList.length === 0 ? (
+                          <div className="text-xs text-on-surface-variant py-4 text-center">
+                            No hay contratos registrados.
                           </div>
-                        ))}
+                        ) : (
+                          contractsList.slice(0, 4).map((c) => {
+                            const isVigente = c.status.toLowerCase().includes("vigente") || c.status.toLowerCase().includes("activo");
+                            const isPendiente = c.status.toLowerCase().includes("pend") || c.status.toLowerCase().includes("firma");
+                            const dot = isVigente ? "bg-tertiary" : isPendiente ? "bg-secondary" : "bg-error";
+                            const tone = isVigente ? "text-tertiary" : isPendiente ? "text-secondary" : "text-error";
+                            return (
+                              <div key={c.id} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2">
+                                <p className="text-xs font-bold text-on-surface truncate max-w-[120px]" title={c.supplier}>{c.supplier}</p>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-xs font-bold text-primary">{c.discount}</span>
+                                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${tone}`}>
+                                    <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                                    {c.status}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr]">
-                  <div className="rounded-xl border border-white/10 bg-surface-container-low p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-on-surface text-sm">Proveedores Destacados</h3>
-                      <button onClick={() => setActive("suppliers")} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
-                        Ver todos <Icon name="arrow_forward" className="text-xs" />
-                      </button>
-                    </div>
-                    <div className="space-y-3">
-                      {[
-                        { initials: "CF", name: "CyberFlow Systems", tags: ["SaaS"], metric: 98, icon: "memory", online: true },
-                        { initials: "AE", name: "Aether Energy", tags: ["Renewable"], metric: 99, icon: "bolt", online: false },
-                        { initials: "ZM", name: "Zenith Mfg.", tags: ["Industrial"], metric: 92, icon: "factory", online: true },
-                        { initials: "NV", name: "Nova Systems Corp", tags: ["Cloud"], metric: 96, icon: "cloud", online: true },
-                      ].map((s) => (
-                        <div key={s.name} className="flex items-center gap-3">
-                          <div className="relative shrink-0">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-                              <Icon name={s.icon} className="text-primary text-base" />
-                            </div>
-                            {s.online && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-tertiary border-2 border-surface-container-low" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="text-xs font-bold text-on-surface truncate">{s.name}</p>
-                              <span className="text-[10px] font-bold text-primary ml-2 shrink-0">{s.metric}%</span>
-                            </div>
-                            <div className="h-1 w-full rounded-full bg-white/10">
-                              <div className="h-full rounded-full bg-primary" style={{ width: `${s.metric}%` }} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 </div>
@@ -603,16 +674,39 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                     </table>
                   </div>
                   <div className="flex flex-col gap-4 border-t border-white/5 bg-surface-container-high px-6 py-4 text-xs font-semibold text-on-surface-variant sm:flex-row sm:items-center sm:justify-between">
-                    <p>Mostrando 1-4 de 1,284 ordenes</p>
+                    <p>
+                      Mostrando {ordersPage * ordersSize + 1} - {Math.min((ordersPage + 1) * ordersSize, ordersTotalElements)} de {ordersTotalElements} órdenes
+                    </p>
                     <div className="flex items-center gap-2">
-                      {["chevron_left", "1", "2", "3", "...", "32", "chevron_right"].map((item) => (
-                        <button
-                          key={item}
-                          className={`flex h-8 min-w-8 items-center justify-center rounded-md px-2 ${item === "1" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary"}`}
+                      <button 
+                        disabled={ordersPage === 0}
+                        onClick={() => setOrdersPage(p => Math.max(0, p - 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+                      >
+                        <Icon name="chevron_left" className="text-base" />
+                      </button>
+
+                      {Array.from({ length: ordersTotalPages }).map((_, pageIdx) => (
+                        <button 
+                          key={pageIdx}
+                          onClick={() => setOrdersPage(pageIdx)}
+                          className={`flex h-8 min-w-8 items-center justify-center rounded-lg text-xs font-bold transition px-2 ${
+                            ordersPage === pageIdx 
+                              ? "bg-primary text-on-primary" 
+                              : "bg-surface-container-high/20 text-on-surface-variant hover:bg-white/5"
+                          }`}
                         >
-                          {item.startsWith("chevron") ? <Icon name={item} className="text-base" /> : item}
+                          {pageIdx + 1}
                         </button>
                       ))}
+
+                      <button 
+                        disabled={ordersPage >= ordersTotalPages - 1}
+                        onClick={() => setOrdersPage(p => Math.min(ordersTotalPages - 1, p + 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+                      >
+                        <Icon name="chevron_right" className="text-base" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -704,9 +798,7 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                       onClick={() => {
                         // Buscamos la referencia original del objeto de base de datos dbInvoices
                         const originalInvoice = dbInvoices.find(i => i.id === invoice.id);
-                        // Extraemos el id de la orden asociada (idOrden.id) o el id de la factura como fallback
-                        const orderId = originalInvoice?.idOrden?.id || originalInvoice?.id || invoice.id;
-                        setSelectedOrderIdForPay(orderId);
+                        setSelectedInvoiceForPay(originalInvoice || invoice);
                       }}
                     >
                       Pagar
@@ -719,18 +811,39 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
         </table>
       </div>
       <div className="flex flex-col gap-4 border-t border-white/5 px-6 py-4 text-xs font-semibold text-on-surface-variant sm:flex-row sm:items-center sm:justify-between">
-        <p>Mostrando 1 - 4 de 42 facturas</p>
+        <p>
+          Mostrando {invoicesPage * invoicesSize + 1} - {Math.min((invoicesPage + 1) * invoicesSize, invoicesTotalElements)} de {invoicesTotalElements} facturas
+        </p>
         <div className="flex items-center gap-2">
-          {["chevron_left", "1", "2", "3", "chevron_right"].map((item) => (
-            <button
-              key={item}
-              className={`flex h-8 min-w-8 items-center justify-center rounded-md border border-white/5 px-2 ${
-                item === "1" ? "bg-primary text-on-primary" : "bg-surface text-on-surface-variant hover:text-primary"
+          <button 
+            disabled={invoicesPage === 0}
+            onClick={() => setInvoicesPage(p => Math.max(0, p - 1))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+          >
+            <Icon name="chevron_left" className="text-base" />
+          </button>
+
+          {Array.from({ length: invoicesTotalPages }).map((_, pageIdx) => (
+            <button 
+              key={pageIdx}
+              onClick={() => setInvoicesPage(pageIdx)}
+              className={`flex h-8 min-w-8 items-center justify-center rounded-lg text-xs font-bold transition px-2 ${
+                invoicesPage === pageIdx 
+                  ? "bg-primary text-on-primary" 
+                  : "bg-surface-container-high/20 text-on-surface-variant hover:bg-white/5"
               }`}
             >
-              {item.startsWith("chevron") ? <Icon name={item} className="text-base" /> : item}
+              {pageIdx + 1}
             </button>
           ))}
+
+          <button 
+            disabled={invoicesPage >= invoicesTotalPages - 1}
+            onClick={() => setInvoicesPage(p => Math.min(invoicesTotalPages - 1, p + 1))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+          >
+            <Icon name="chevron_right" className="text-base" />
+          </button>
         </div>
       </div>
     </div>
@@ -883,18 +996,39 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                   </div>
 
                   <div className="flex flex-col gap-4 border-t border-white/5 px-6 py-4 text-xs font-semibold text-on-surface-variant sm:flex-row sm:items-center sm:justify-between">
-                    <p>Mostrando 1 a 4 de 42 contratos</p>
+                    <p>
+                      Mostrando {contractsPage * contractsSize + 1} - {Math.min((contractsPage + 1) * contractsSize, contractsTotalElements)} de {contractsTotalElements} contratos
+                    </p>
                     <div className="flex items-center gap-2">
-                      {["chevron_left", "1", "2", "3", "chevron_right"].map((item) => (
-                        <button
-                          key={item}
-                          className={`flex h-8 min-w-8 items-center justify-center rounded-md border border-white/5 px-2 ${
-                            item === "1" ? "bg-primary text-on-primary" : "bg-surface text-on-surface-variant hover:text-primary"
+                      <button 
+                        disabled={contractsPage === 0}
+                        onClick={() => setContractsPage(p => Math.max(0, p - 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+                      >
+                        <Icon name="chevron_left" className="text-base" />
+                      </button>
+
+                      {Array.from({ length: contractsTotalPages }).map((_, pageIdx) => (
+                        <button 
+                          key={pageIdx}
+                          onClick={() => setContractsPage(pageIdx)}
+                          className={`flex h-8 min-w-8 items-center justify-center rounded-lg text-xs font-bold transition px-2 ${
+                            contractsPage === pageIdx 
+                              ? "bg-primary text-on-primary" 
+                              : "bg-surface-container-high/20 text-on-surface-variant hover:bg-white/5"
                           }`}
                         >
-                          {item.startsWith("chevron") ? <Icon name={item} className="text-base" /> : item}
+                          {pageIdx + 1}
                         </button>
                       ))}
+
+                      <button 
+                        disabled={contractsPage >= contractsTotalPages - 1}
+                        onClick={() => setContractsPage(p => Math.min(contractsTotalPages - 1, p + 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-high/20 text-on-surface-variant transition hover:bg-white/5 disabled:opacity-30"
+                      >
+                        <Icon name="chevron_right" className="text-base" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -998,32 +1132,101 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
 
             {active === "account" && (
               <section className="space-y-6">
-                {/* Header */}
-                <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
-                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
-                      <span className="material-symbols-outlined text-4xl text-cyan-400 font-bold">account_circle</span>
+                {editing ? (
+                  <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8 space-y-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-on-surface">Editar Información de Cuenta</h2>
+                      <p className="text-sm text-on-surface-variant mt-1">Actualiza tus datos personales de acceso.</p>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
-                      <h1 className="mt-1 text-3xl font-semibold text-on-surface">{user?.nombre || "—"}</h1>
-                      <div className="mt-2 flex flex-wrap items-center gap-3">
-                        <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                          <Icon name="verified_user" className="text-sm" />
-                          {user?.role || "Comprador"}
-                        </span>
-                        {user?.activo !== undefined && (
-                          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                            user.activo ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
-                          }`}>
-                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                            {user.activo ? "Cuenta activa" : "Cuenta inactiva"}
-                          </span>
-                        )}
+                    
+                    <form onSubmit={handleUpdateProfile} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre Completo</label>
+                        <input
+                          type="text"
+                          required
+                          value={profileForm.nombre}
+                          onChange={(e) => setProfileForm({ ...profileForm, nombre: e.target.value })}
+                          className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Correo Electrónico</label>
+                        <input
+                          type="email"
+                          required
+                          value={profileForm.email}
+                          onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                          className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nueva Contraseña</label>
+                        <input
+                          type="password"
+                          placeholder="Dejar en blanco para no modificar"
+                          value={profileForm.password}
+                          onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                          className="w-full rounded-xl bg-white dark:bg-neutral-800 border border-outline/20 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary transition"
+                        />
+                      </div>
+
+                      <div className="flex gap-4 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(false)}
+                          className="flex-1 rounded-xl border border-outline/10 py-3 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={updatingProfile}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-xs font-bold uppercase tracking-wider text-on-primary hover:brightness-110 transition disabled:opacity-50"
+                        >
+                          {updatingProfile ? "Guardando..." : "Guardar Cambios"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : (
+                  <>
+                    {/* Header */}
+                    <div className="rounded-3xl border border-white/10 bg-surface-container-low p-8">
+                      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400/20 to-primary/20 border border-white/10">
+                          <span className="material-symbols-outlined text-4xl text-cyan-400 font-bold">account_circle</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs uppercase tracking-[0.3em] text-on-surface-variant">Perfil de usuario</p>
+                          <h1 className="mt-1 text-3xl font-semibold text-on-surface">{user?.nombre || "—"}</h1>
+                          <div className="mt-2 flex flex-wrap items-center gap-3">
+                            <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                              <Icon name="verified_user" className="text-sm" />
+                              {user?.role || "Comprador"}
+                            </span>
+                            {user?.activo !== undefined && (
+                              <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                                user.activo ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+                              }`}>
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                {user.activo ? "Cuenta activa" : "Cuenta inactiva"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={startEditing}
+                          className="rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 font-semibold text-primary transition hover:bg-primary/20 text-xs uppercase tracking-wider"
+                        >
+                          Editar Datos
+                        </button>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
                 {/* Info grid */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1219,11 +1422,11 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           user={user}
         />
       )}
-      {/* <StereumPayModal
-        isOpen={selectedOrderIdForPay !== null}
-        onClose={() => setSelectedOrderIdForPay(null)}
-        orderId={selectedOrderIdForPay || ""}
-      /> */}
+      <StereumPayModal
+        isOpen={selectedInvoiceForPay !== null}
+        onClose={() => setSelectedInvoiceForPay(null)}
+        invoice={selectedInvoiceForPay}
+      />
     </div>
   );
 }

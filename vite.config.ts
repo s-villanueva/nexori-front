@@ -7,7 +7,7 @@ export default defineConfig({
 
   vite: {
     server: {
-      allowedHosts: ["https://app.mandarina-group.cc", "nexori.onrender.com"],
+      allowedHosts: ["app.mandarina-group.cc", "nexori.onrender.com"],
     },
   },
 });

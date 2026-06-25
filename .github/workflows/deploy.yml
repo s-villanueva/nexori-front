@@ -1,18 +1,18 @@
 - name: Copy dist to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "dist/,nginx.conf,Dockerfile"
-          target: "~/spring/prod/frontend/"
+  uses: appleboy/scp-action@v0.1.7
+  with:
+  host: ${{ secrets.VM_HOST }}
+  username: ${{ secrets.VM_USER }}
+  key: ${{ secrets.VM_SSH_KEY }}
+  source: "dist/,nginx.conf,Dockerfile"
+  target: "~/spring/prod/frontend/"
 
-      - name: Rebuild container
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd ~/spring/prod
-            docker compose up -d --build frontend
+- name: Rebuild container
+  uses: appleboy/ssh-action@v1
+  with:
+    host: ${{ secrets.VM_HOST }}
+    username: ${{ secrets.VM_USER }}
+    key: ${{ secrets.VM_SSH_KEY }}
+    script: |
+      cd ~/spring/prod
+      docker compose up -d --build frontend

@@ -177,7 +177,7 @@ function LandingPage() {
 function LoginModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("alex.vanguard@enterprise.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [submitting, setSubmitting] = useState(false);

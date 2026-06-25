@@ -47,63 +47,37 @@ function VerifyPage() {
       <BrandHeader />
 
       <form onSubmit={onSubmit} className="glass-card flex w-full flex-col gap-6 rounded-xl p-8 shadow-2xl">
-        {!email ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="mb-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-surface-container-highest">
-                <span className="material-symbols-outlined text-3xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  mail
-                </span>
-              </div>
-              <span className="text-on-surface font-semibold">Correo Requerido</span>
-              <p className="text-xs text-on-surface-variant">
-                Por favor, introduce el correo electrónico asociado a tu cuenta para continuar con la verificación.
-              </p>
-            </div>
-            
-            <div className="flex flex-col gap-1.5 mt-2">
-              <label className="ps-label ml-1">Correo Electrónico</label>
-              <input
-                type="email"
-                required
-                placeholder="ejemplo@empresa.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  sessionStorage.setItem("2fa_email", e.target.value);
-                }}
-                className="ps-input"
-              />
-            </div>
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="mb-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-surface-container-highest">
+            <span className="material-symbols-outlined text-3xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+              shield_person
+            </span>
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="mb-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-surface-container-highest">
-              <span className="material-symbols-outlined text-3xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                shield_person
-              </span>
-            </div>
-            <span className="text-on-surface font-semibold">Verificación Requerida</span>
-            <div className="flex items-center gap-1.5 justify-center bg-[#E6F3F0] border border-[#CBD6D4] px-3 py-1.5 rounded-xl">
-              <span className="text-[12px] text-primary font-medium">{email}</span>
-              <button
-                type="button"
-                className="text-primary hover:text-primary/80 transition-colors flex items-center"
-                onClick={() => {
-                  const next = window.prompt("Editar email de verificación:", email);
-                  if (next) {
-                    setEmail(next);
-                    sessionStorage.setItem("2fa_email", next);
-                  }
-                }}
-                aria-label="Edit email"
-              >
-                <span className="material-symbols-outlined text-[16px] leading-none">edit</span>
-              </button>
-            </div>
-          </div>
-        )}
+          <span className="text-on-surface font-semibold">Verificación Requerida</span>
+        </div>
 
+        {/* Email Input (Styled like login form) */}
+        <div className="flex flex-col gap-2 text-left">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-[#3B534E] ml-1">Correo Electrónico</label>
+          <div className="relative flex items-center rounded-xl border border-[#CBD6D4] bg-[#EAEFEF]/50 transition-all focus-within:border-[#0F6E56] focus-within:ring-2 focus-within:ring-[#0F6E56]/20">
+            <span className="material-symbols-outlined absolute left-3 text-[#3B534E]" style={{ fontVariationSettings: "'FILL' 1" }}>
+              mail
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                sessionStorage.setItem("2fa_email", e.target.value);
+              }}
+              placeholder="alex.vanguard@enterprise.com"
+              className="w-full border-none bg-transparent py-3.5 pl-12 pr-4 text-sm text-[#122A25] placeholder:text-[#3B534E]/30 focus:outline-none focus:ring-0"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Authentication Code (Restored custom boxes) */}
         <div className="flex flex-col gap-3">
           <label className="ps-label ml-1">Código de Autenticación</label>
           <OtpInput length={6} value={code} onChange={setCode} />

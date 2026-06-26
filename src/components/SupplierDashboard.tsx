@@ -1611,25 +1611,34 @@ const handleVerify2FA = async () => {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 text-on-surface">
-                              {Array.isArray(selectedViewOrder.detalles) && selectedViewOrder.detalles.length > 0 ? (
-                                selectedViewOrder.detalles.map((d: any, idx: number) => (
-                                  <tr key={idx}>
-                                    <td className="px-4 py-3">
-                                      <p className="font-bold">{d.idProducto?.nombre || d.nombreProducto || "Producto ID: " + d.idProducto}</p>
-                                      {d.idProducto?.sku && <p className="text-[10px] text-on-surface-variant font-mono">{d.idProducto.sku}</p>}
-                                    </td>
-                                    <td className="px-4 py-3 font-semibold">{d.cantidad}</td>
-                                    <td className="px-4 py-3">Bs {Number(d.precioUnitario).toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-right font-bold text-primary">Bs {Number(d.subtotal).toFixed(2)}</td>
-                                  </tr>
-                                ))
-                              ) : (
-                                <tr>
-                                  <td colSpan={4} className="px-4 py-6 text-center text-on-surface-variant">
-                                    No se encontraron detalles para esta orden (o se agregaron usando el formato anterior).
-                                  </td>
-                                </tr>
-                              )}
+                              {(() => {
+                                 const detallesList = selectedViewOrder.detalles || selectedViewOrder.ordens || [];
+                                 return Array.isArray(detallesList) && detallesList.length > 0 ? (
+                                   detallesList.map((d: any, idx: number) => {
+                                     const prodId = typeof d.idProducto === 'object' ? d.idProducto?.id : d.idProducto;
+                                     const matched = dbProducts.find(p => (p.id || p.idProducto) === prodId);
+                                     const productName = d.nombreProducto || d.nombre || (typeof d.idProducto === 'object' && d.idProducto?.nombre) || d.idProducto?.nombre || matched?.nombre || (prodId ? "Producto ID: " + prodId : "Producto");
+                                     const sku = (typeof d.idProducto === 'object' && d.idProducto?.sku) || d.idProducto?.sku || matched?.sku || null;
+                                     return (
+                                       <tr key={idx}>
+                                         <td className="px-4 py-3">
+                                           <p className="font-bold">{productName}</p>
+                                           {sku && <p className="text-[10px] text-on-surface-variant font-mono">{sku}</p>}
+                                         </td>
+                                         <td className="px-4 py-3 font-semibold">{d.cantidad}</td>
+                                         <td className="px-4 py-3">Bs {Number(d.precioUnitario).toFixed(2)}</td>
+                                         <td className="px-4 py-3 text-right font-bold text-primary">Bs {Number(d.subtotal).toFixed(2)}</td>
+                                       </tr>
+                                     );
+                                   })
+                                 ) : (
+                                   <tr>
+                                     <td colSpan={4} className="px-4 py-6 text-center text-on-surface-variant">
+                                       No se encontraron detalles para esta orden (o se agregaron usando el formato anterior).
+                                     </td>
+                                   </tr>
+                                 );
+                               })()}
                             </tbody>
                           </table>
                         </div>

@@ -7,6 +7,7 @@ import { CreateWarehouseModal } from "./CreateWarehouseModal";
 import { CreateContractModal } from "./CreateContractModal";
 import { AddProductToWarehouseModal } from "./AddProductToWarehouseModal";
 import { CreateCategoryModal } from "./CreateCategoryModal";
+import { EditProductModal } from "./EditProductModal";
 import { toast } from "sonner";
 
 
@@ -112,6 +113,8 @@ export function SupplierDashboard({ userEmail, onSignOut }: { userEmail: string;
   const [showCreateProduct, setShowCreateProduct] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showCreateContract, setShowCreateContract] = useState(false);
+  const [selectedViewOrder, setSelectedViewOrder] = useState<any | null>(null);
+  const [selectedEditProduct, setSelectedEditProduct] = useState<any | null>(null);
 
 
   const [totpQr, setTotpQr] = useState<string | null>(null);
@@ -597,24 +600,33 @@ const handleVerify2FA = async () => {
                                 </span>
                               </td>
                               <td className="py-4">
-                                {isPending ? (
-                                  <div className="flex gap-2">
-                                    <button 
-                                      onClick={() => handleUpdateOrderStatus(order, "aprobado")}
-                                      className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20 cursor-pointer"
-                                    >
-                                      Aceptar
-                                    </button>
-                                    <button 
-                                      onClick={() => handleUpdateOrderStatus(order, "rechazado")}
-                                      className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 cursor-pointer"
-                                    >
-                                      Rechazar
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-on-surface-variant">—</span>
-                                )}
+                                <div className="flex items-center gap-3">
+                                  {isPending ? (
+                                    <div className="flex gap-2">
+                                      <button 
+                                        onClick={() => handleUpdateOrderStatus(order, "aprobado")}
+                                        className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20 cursor-pointer"
+                                      >
+                                        Aceptar
+                                      </button>
+                                      <button 
+                                        onClick={() => handleUpdateOrderStatus(order, "rechazado")}
+                                        className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 cursor-pointer"
+                                      >
+                                        Rechazar
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-on-surface-variant">—</span>
+                                  )}
+                                  <button 
+                                    onClick={() => setSelectedViewOrder(order)}
+                                    className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition"
+                                    title="Ver Detalles"
+                                  >
+                                    <span className="material-symbols-outlined text-base">visibility</span>
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1448,7 +1460,11 @@ const handleVerify2FA = async () => {
                             </td>
                             <td className="py-5 text-center">
                               <div className="flex items-center justify-center gap-3 text-on-surface-variant">
-                                <button className="transition hover:text-primary">
+                                <button 
+                                  onClick={() => setSelectedEditProduct(product)}
+                                  className="transition hover:text-primary"
+                                  title="Editar producto"
+                                >
                                   <span className="material-symbols-outlined text-lg">edit</span>
                                 </button>
                                 <button className="transition hover:text-red-400">
@@ -1508,6 +1524,17 @@ const handleVerify2FA = async () => {
                   }}
                 />
               )}
+              {selectedEditProduct && (
+                <EditProductModal
+                  product={selectedEditProduct}
+                  onClose={() => setSelectedEditProduct(null)}
+                  onSuccess={() => {
+                    api.get(`/api/v1/proveedores/${providerId}/productos`)
+                      .then((res) => { if (res) setDbProducts(res); })
+                      .catch(console.error);
+                  }}
+                />
+              )}
               {showBulkUpload && (
                 <BulkUploadProductsModal
                   idEmpresa={idEmpresa ?? ""}
@@ -1533,6 +1560,91 @@ const handleVerify2FA = async () => {
                     // Refrescar categorías si fuera necesario
                   }}
                 />
+              )}
+              {selectedViewOrder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                  <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-surface shadow-2xl overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-surface-container-high">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-xl">receipt_long</span>
+                        <span className="font-bold text-on-surface">Detalle de la Orden: {selectedViewOrder.id}</span>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedViewOrder(null)} 
+                        className="p-1 rounded-lg hover:bg-white/5 text-on-surface-variant transition"
+                      >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                      </button>
+                    </div>
+                    <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-4 text-sm border-b border-white/5 pb-4">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-on-surface-variant">Comprador</p>
+                          <p className="font-bold mt-1 text-on-surface">{selectedViewOrder.nombreEmpresaCompradora || "Empresa Compradora"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-on-surface-variant">Fecha</p>
+                          <p className="font-semibold mt-1 text-on-surface">{selectedViewOrder.fecha ? new Date(selectedViewOrder.fecha).toLocaleString() : "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-on-surface-variant">Estado</p>
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary mt-1">
+                            {selectedViewOrder.idEstado || selectedViewOrder.status || "pendiente"}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-on-surface-variant">Total General</p>
+                          <p className="font-bold text-lg text-primary mt-0.5">Bs {selectedViewOrder.total != null ? Number(selectedViewOrder.total).toFixed(2) : "0.00"}</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-bold text-on-surface-variant mb-2">Productos en esta Orden</p>
+                        <div className="border border-white/10 rounded-xl overflow-hidden">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-surface-container-high text-on-surface-variant">
+                              <tr>
+                                <th className="px-4 py-2 font-bold">Producto</th>
+                                <th className="px-4 py-2 font-bold">Cantidad</th>
+                                <th className="px-4 py-2 font-bold">Precio Unit.</th>
+                                <th className="px-4 py-2 font-bold text-right">Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 text-on-surface">
+                              {Array.isArray(selectedViewOrder.detalles) && selectedViewOrder.detalles.length > 0 ? (
+                                selectedViewOrder.detalles.map((d: any, idx: number) => (
+                                  <tr key={idx}>
+                                    <td className="px-4 py-3">
+                                      <p className="font-bold">{d.idProducto?.nombre || d.nombreProducto || "Producto ID: " + d.idProducto}</p>
+                                      {d.idProducto?.sku && <p className="text-[10px] text-on-surface-variant font-mono">{d.idProducto.sku}</p>}
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold">{d.cantidad}</td>
+                                    <td className="px-4 py-3">Bs {Number(d.precioUnitario).toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-right font-bold text-primary">Bs {Number(d.subtotal).toFixed(2)}</td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={4} className="px-4 py-6 text-center text-on-surface-variant">
+                                    No se encontraron detalles para esta orden (o se agregaron usando el formato anterior).
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3 border-t border-white/10 px-6 py-4 bg-surface-container-high">
+                      <button 
+                        onClick={() => setSelectedViewOrder(null)} 
+                        className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </section>
           )}

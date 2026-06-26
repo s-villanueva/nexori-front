@@ -1,15 +1,15 @@
 import { useState, useEffect, type MouseEventHandler } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../lib/auth";
-import { CreateOrderModal } from "./CreateOrderModal";
 import { StereumPayModal } from "./StereumPayModal"; 
 import { CreateContractModal } from "./CreateContractModal"; 
 import { toast } from "sonner"; 
 
-type NavKey = "dashboard" | "orders" | "invoices" | "contracts" |  "suppliers" | "account";
+type NavKey = "dashboard" | "catalog" | "orders" | "invoices" | "contracts" |  "suppliers" | "account";
 
 const NAV_ITEMS: { key: NavKey; label: string; icon: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: "dashboard" },
+  { key: "catalog", label: "Catálogo / Compras", icon: "shopping_cart" },
   { key: "orders", label: "Mis órdenes", icon: "receipt_long" },
   { key: "invoices", label: "Facturas", icon: "receipt" },
   { key: "contracts", label: "Contratos", icon: "description" },
@@ -34,6 +34,198 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [selectedInvoiceForPay, setSelectedInvoiceForPay] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Cart & Catalog States
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [catalogProductsAll, setCatalogProductsAll] = useState<any[]>([]);
+  const [loadingAllProducts, setLoadingAllProducts] = useState(false);
+  const [configuringCartProduct, setConfiguringCartProduct] = useState<any | null>(null);
+  const [loadingConfigProduct, setLoadingConfigProduct] = useState(false);
+  const [configProductDetails, setConfigProductDetails] = useState<any | null>(null);
+  const [selectedConfigWarehouse, setSelectedConfigWarehouse] = useState<any | null>(null);
+  const [configCantidad, setConfigCantidad] = useState(1);
+  const [fechaOrden, setFechaOrden] = useState(() => new Date().toISOString().split("T")[0]);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogSupplierFilter, setCatalogSupplierFilter] = useState("all");
+  const [catalogCategoryFilter, setCatalogCategoryFilter] = useState("all");
+
+  const fetchAllCatalogProducts = async (suppliers: any[]) => {
+    setLoadingAllProducts(true);
+    try {
+      const allProducts: any[] = [];
+      await Promise.all(
+        suppliers.map(async (supplier) => {
+          try {
+            const res = await api.get(`/api/v1/products/proveedor/${supplier.id}`);
+            if (res && Array.isArray(res)) {
+              res.forEach((prod: any) => {
+                allProducts.push({
+                  ...prod,
+                  supplierId: supplier.id,
+                  supplierName: supplier.nombreEmpresa || supplier.nombre || "Proveedor SRL",
+                });
+              });
+            }
+          } catch (e) {
+            console.error(`Error loading catalog for supplier ${supplier.id}:`, e);
+          }
+        })
+      );
+      setCatalogProductsAll(allProducts);
+    } catch (e) {
+      console.error("Error fetching all catalog products:", e);
+    } finally {
+      setLoadingAllProducts(false);
+    }
+  };
+
+  const handleStartAddToCart = async (product: any) => {
+    setConfiguringCartProduct(product);
+    setLoadingConfigProduct(true);
+    setConfigProductDetails(null);
+    setSelectedConfigWarehouse(null);
+    setConfigCantidad(1);
+    try {
+      const res = await api.get(`/api/v1/producto-almacen/buscar?sku=${encodeURIComponent(product.sku)}`);
+      if (!res) throw new Error("Producto no encontrado en almacenes.");
+      
+      let normalized: any;
+      if (Array.isArray(res)) {
+        const first = res[0] ?? {};
+        normalized = {
+          idProducto: (first.idProducto?.id || first.idProducto || first.id || "") as string,
+          sku: product.sku,
+          nombre: first.nombreProducto ?? product.nombre ?? "Producto",
+          almacenes: res.map((item: any, index: number) => ({
+            id: item.idAlmacen?.id ?? item.idAlmacen ?? `almacen-${index}`,
+            nombre: item.nombreAlmacen ?? `Almacén ${index + 1}`,
+            idProveedor: item.idProveedor ?? product.supplierId ?? "",
+            nombreProveedor: item.nombreProveedor ?? product.supplierName ?? "",
+            stock: item.stock ?? 0,
+            precio: item.precioBase ?? item.precio ?? 0,
+            cantidadMinima: item.min ?? 1,
+            cantidadMaxima: item.max ?? 9999,
+          })),
+        };
+      } else {
+        normalized = {
+          idProducto: (res.idProducto?.id || res.idProducto || res.id || "") as string,
+          sku: res.sku ?? res.codigoSku ?? product.sku,
+          nombre: res.nombreProducto ?? res.nombre ?? product.nombre ?? "Producto",
+          almacenes: Array.isArray(res.almacenes) ? res.almacenes.map((item: any) => ({
+            id: item.idSucursal ?? item.id,
+            nombre: item.nombreSucursal ?? item.nombreAlmacen ?? item.nombre ?? "Almacén",
+            idProveedor: item.idProveedor ?? item.proveedor?.id ?? product.supplierId ?? "",
+            nombreProveedor: item.nombreProveedor ?? item.proveedor?.nombre ?? product.supplierName ?? "",
+            stock: item.stock ?? item.cantidad ?? 0,
+            precio: item.precio ?? item.precioUnitario ?? 0,
+            cantidadMinima: item.cantidadMinima ?? item.minimo ?? 1,
+            cantidadMaxima: item.cantidadMaxima ?? item.maximo ?? 9999,
+          })) : [],
+        };
+      }
+      
+      setConfigProductDetails(normalized);
+      if (normalized.almacenes && normalized.almacenes.length > 0) {
+        const initialWarehouse = normalized.almacenes.find((w: any) => w.stock > 0) || normalized.almacenes[0];
+        setSelectedConfigWarehouse(initialWarehouse);
+        setConfigCantidad(initialWarehouse.cantidadMinima || 1);
+      } else {
+        toast.error("Este producto no tiene almacenes o inventario asociado.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "No se pudo obtener la información de inventario para este producto.");
+      setConfiguringCartProduct(null);
+    } finally {
+      setLoadingConfigProduct(false);
+    }
+  };
+
+  const handleConfirmAddToCart = () => {
+    if (!configuringCartProduct || !selectedConfigWarehouse || !configProductDetails) return;
+
+    const existingIndex = cartItems.findIndex(
+      (item) => item.idProducto === configProductDetails.idProducto && item.idAlmacen === selectedConfigWarehouse.id
+    );
+
+    const subtotal = selectedConfigWarehouse.precio * configCantidad;
+
+    if (existingIndex > -1) {
+      const updated = [...cartItems];
+      const current = updated[existingIndex];
+      const newQty = current.cantidad + configCantidad;
+      if (newQty > Math.min(selectedConfigWarehouse.cantidadMaxima, selectedConfigWarehouse.stock)) {
+        toast.error(`La cantidad excede el stock o límite máximo del almacén para ${configProductDetails.nombre}`);
+        return;
+      }
+      current.cantidad = newQty;
+      current.subtotal = current.cantidad * current.precioUnitario;
+      setCartItems(updated);
+    } else {
+      setCartItems([
+        ...cartItems,
+        {
+          idProducto: configProductDetails.idProducto,
+          nombreProducto: configProductDetails.nombre,
+          sku: configProductDetails.sku,
+          idAlmacen: selectedConfigWarehouse.id,
+          nombreAlmacen: selectedConfigWarehouse.nombre,
+          cantidad: configCantidad,
+          precioUnitario: selectedConfigWarehouse.precio,
+          subtotal,
+          stock: selectedConfigWarehouse.stock,
+          min: selectedConfigWarehouse.cantidadMinima,
+          max: selectedConfigWarehouse.cantidadMaxima,
+          idProveedor: selectedConfigWarehouse.idProveedor || configuringCartProduct.supplierId,
+          nombreProveedor: selectedConfigWarehouse.nombreProveedor || configuringCartProduct.supplierName,
+        },
+      ]);
+    }
+
+    toast.success(`${configProductDetails.nombre} agregado al carrito.`);
+    setConfiguringCartProduct(null);
+    setConfigProductDetails(null);
+    setSelectedConfigWarehouse(null);
+  };
+
+  const handlePlaceOrderForSupplier = async (supplierId: string, items: any[]) => {
+    if (!user) return;
+    const totalGeneral = items.reduce((acc, curr) => acc + curr.subtotal, 0);
+    const now = new Date();
+    const payload = {
+      total: totalGeneral,
+      fecha: now.toISOString(),
+      fechaOrden,
+      idEstado: "pendiente",
+      idProveedor: supplierId,
+      idUsuario: user.id,
+      idEmpresaCompradora: user.id_empresa,
+      idSucursal: user.id_sucursal,
+      detalles: items.map((d) => ({
+        cantidad: d.cantidad,
+        precioUnitario: d.precioUnitario,
+        subtotal: d.subtotal,
+        idProducto: d.idProducto,
+        idAlmacen: d.idAlmacen,
+      })),
+      version: 0,
+    };
+
+    try {
+      await api.post("/api/v1/ordenes-compra", payload);
+      toast.success(`Orden creada con éxito para ${items[0].nombreProveedor}`);
+      setCartItems(prev => prev.filter(item => item.idProveedor !== supplierId));
+      
+      // Refresh order stats and lists
+      const stats = await api.get(`/api/v1/ordenes-compra/stats?idEmpresa=${companyId}`);
+      if (stats) setOrderStats({ ordenesTotales: stats.ordenesTotales ?? 0, pendientes: stats.pendientes ?? 0, gastoMensual: stats.gastoMensual ?? 0 });
+      const res = await api.get(`/api/v1/ordenes-compra/buyer?idEmpresa=${companyId}&size=${ordersSize}&page=${ordersPage}`);
+      if (res?.content) setDbOrders(res.content);
+    } catch (e: any) {
+      toast.error(e?.message || "Error al crear la orden.");
+    }
+  };
 
   // States for updating account profile
   const [editing, setEditing] = useState(false);
@@ -136,6 +328,10 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
 
   // 2FA & Supplier Conversion state variables
   const [showBecomeSupplierModal, setShowBecomeSupplierModal] = useState(false);
+  const [selectedViewOrder, setSelectedViewOrder] = useState<any | null>(null);
+  const [selectedCatalogProvider, setSelectedCatalogProvider] = useState<{ id: string; name: string } | null>(null);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   // 2FA state variables
   const [totpQr, setTotpQr] = useState<string | null>(null);
@@ -200,11 +396,15 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           } catch (e) { console.error(e); }
         }
 
-        // Cargamos proveedores si estamos en la pestaña o si abrimos el modal de contratos
-        if (active === "suppliers" || active === "contracts") {
+        // Cargamos proveedores si estamos en la pestaña o si abrimos el modal de contratos o catálogo
+        if (active === "suppliers" || active === "contracts" || active === "catalog") {
           try {
             const res = await api.get(`/api/v1/proveedores?page=0&size=50`);
-            if (res?.content) setDbSuppliers(res.content);
+            const suppliers = res?.content || [];
+            setDbSuppliers(suppliers);
+            if (active === "catalog") {
+              await fetchAllCatalogProducts(suppliers);
+            }
           } catch (e) { console.error(e); }
         }
       } catch (err) {
@@ -314,13 +514,33 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
     }
   };
 
+  const handleFetchCatalog = async (providerId: string, providerName: string) => {
+    setSelectedCatalogProvider({ id: providerId, name: providerName });
+    setLoadingCatalog(true);
+    setCatalogProducts([]);
+    try {
+      const res = await api.get(`/api/v1/products/proveedor/${providerId}`);
+      if (res && Array.isArray(res)) {
+        setCatalogProducts(res);
+      } else {
+        setCatalogProducts([]);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al obtener catálogo de productos.");
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
   const ordersList = dbOrders.map(o => ({
     id: o.id,
     initials: (o.nombreProveedor || "P").substring(0,2).toUpperCase(),
     supplier: o.nombreProveedor || "Proveedor Demo SRL",
     date: o.fecha ? new Date(o.fecha).toLocaleDateString() : "N/A",
     amount: `Bs ${o.total}`,
-    status: (o.idEstado || "pendiente").toUpperCase()
+    status: (o.idEstado || "pendiente").toUpperCase(),
+    raw: o
   }));
 
   const invoicesList = dbInvoices.map(i => ({
@@ -335,13 +555,14 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
 
   const contractsList = dbContracts.map(c => {
     const sName = c.nombreProveedor || c.nombreEmpresa || c.idProveedor?.nombreEmpresa || c.idProveedor?.nombre || "Proveedor Demo SRL";
+    const discountVal = c.porcentajeDescuento ?? c.descuento ?? 0;
     return {
-      id: c.idContrato || "CTR-DEMO",
+      id: c.idContrato || c.id || "CTR-DEMO",
       initials: sName.substring(0, 2).toUpperCase(),
       supplier: sName,
-      category: c.nombreCategoria || "Suministros",
+      category: c.nombreProducto || c.nombreCategoria || "Suministros",
       period: c.validez || "Vigente",
-      discount: `${c.descuento || 0}%`,
+      discount: `${discountVal}%`,
       status: c.estado || "Activo",
       periods: null,
       alert: null,
@@ -349,22 +570,42 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
     };
   });
 
-  const suppliersList = dbSuppliers.map(s => ({
-    id: s.id,
-    initials: (s.nombreEmpresa || "P").substring(0,2).toUpperCase(),
-    name: s.nombreEmpresa || "Proveedor SRL",
-    tags: s.tags || ["Proveedor"],
-    metric: "Confianza del Comprador",
-    score: s.score || 95,
-    online: s.activo ?? true,
-    icon: "store"
-  }));
+  const suppliersList = dbSuppliers.map(s => {
+    // Collect unique product categories from s.productos or similar if available, else standard tags
+    const cats = Array.isArray(s.productos) 
+      ? Array.from(new Set(s.productos.map((p: any) => p.nombreCategoria || p.categoria?.nombre).filter(Boolean)))
+      : s.categorias || [];
+    return {
+      id: s.id,
+      initials: (s.nombreEmpresa || "P").substring(0,2).toUpperCase(),
+      name: s.nombreEmpresa || "Proveedor SRL",
+      tags: s.tags || ["Proveedor"],
+      categorias: cats.length > 0 ? cats : ["General"],
+      online: s.activo ?? true,
+      icon: "store",
+      raw: s
+    };
+  });
 
   const contractStatsList = [
     { label: "Contratos Totales", value: contractStats.contratosTotales.toString(), note: "Activos", icon: "description", tone: "text-on-surface" },
     { label: "Tasa de Descuento Promedio", value: contractStats.descuentoPromedio > 0 ? `${contractStats.descuentoPromedio}%` : "0%", note: "Cumplimiento B2B", icon: "verified", tone: "text-primary" },
     { label: "Próximos Vencimientos", value: contractStats.vencimientosCercanos ? contractStats.vencimientosCercanos.toString() : "0", note: contractStats.vencimientosCercanos > 0 ? "Urgente" : "Estable", icon: "warning", tone: contractStats.vencimientosCercanos > 0 ? "text-error" : "text-secondary" },
   ];
+
+  const filteredCatalogProducts = catalogProductsAll.filter((p) => {
+    const matchesSearch =
+      (p.nombre || "").toLowerCase().includes(catalogSearch.toLowerCase()) ||
+      (p.sku || "").toLowerCase().includes(catalogSearch.toLowerCase());
+    const matchesSupplier =
+      catalogSupplierFilter === "all" || p.supplierId === catalogSupplierFilter;
+    
+    const catName = p.nombreCategoria || p.categoria?.nombre || "";
+    const matchesCategory =
+      catalogCategoryFilter === "all" || catName === catalogCategoryFilter;
+      
+    return matchesSearch && matchesSupplier && matchesCategory;
+  });
 
   return (
     <div className="min-h-screen bg-background text-on-surface">
@@ -563,20 +804,286 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
               </section>
             )}
 
+            {active === "catalog" && (
+              <section className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Suministros B2B</p>
+                  <h1 className="mt-2 text-4xl font-bold text-on-surface">
+                    Catálogo de <span className="text-primary">Productos</span>
+                  </h1>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    Consulte el inventario general de los proveedores asociados y orqueste sus órdenes de compra directamente en el carrito.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8 items-start">
+                  
+                  {/* Left Column: Product Search and Catalog Grid */}
+                  <div className="space-y-6">
+                    {/* Filters bar */}
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between rounded-xl border border-white/10 bg-surface-container-low p-4">
+                      <div className="relative flex-1 max-w-md">
+                        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" />
+                        <input
+                          type="text"
+                          value={catalogSearch}
+                          onChange={(e) => setCatalogSearch(e.target.value)}
+                          placeholder="Buscar por nombre o SKU..."
+                          className="w-full bg-black/30 border border-white/10 rounded-full py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-primary placeholder:text-on-surface-variant/50 text-on-surface"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-on-surface-variant">
+                          <Icon name="filter_list" className="text-sm" />
+                          Filtrar:
+                        </div>
+                        
+                        <select
+                          value={catalogSupplierFilter}
+                          onChange={(e) => setCatalogSupplierFilter(e.target.value)}
+                          className="rounded-lg border border-white/10 bg-surface px-3 py-2 text-xs font-bold text-on-surface outline-none transition focus:border-primary"
+                        >
+                          <option value="all">Todos los Proveedores</option>
+                          {dbSuppliers.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.nombreEmpresa || s.nombre || "Proveedor"}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={catalogCategoryFilter}
+                          onChange={(e) => setCatalogCategoryFilter(e.target.value)}
+                          className="rounded-lg border border-white/10 bg-surface px-3 py-2 text-xs font-bold text-on-surface outline-none transition focus:border-primary"
+                        >
+                          <option value="all">Todas las Categorías</option>
+                          {Array.from(
+                            new Set(
+                              catalogProductsAll
+                                .map((p) => p.nombreCategoria || p.categoria?.nombre)
+                                .filter(Boolean)
+                            )
+                          ).map((catName: any) => (
+                            <option key={catName} value={catName}>
+                              {catName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Products Grid */}
+                    {loadingAllProducts ? (
+                      <div className="flex flex-col items-center justify-center py-20 gap-3">
+                        <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                        <p className="text-sm text-on-surface-variant font-bold">Cargando catálogo completo...</p>
+                      </div>
+                    ) : filteredCatalogProducts.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/15 bg-surface-container-low/40 p-12 text-center">
+                        <Icon name="production_quantity_limits" className="text-on-surface-variant text-4xl mb-3" />
+                        <p className="font-bold text-on-surface text-base">No se encontraron productos</p>
+                        <p className="text-xs text-on-surface-variant mt-1">Intente ajustar sus criterios de búsqueda o filtros.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {filteredCatalogProducts.map((p) => (
+                          <div key={p.id} className="flex flex-col rounded-xl border border-white/10 bg-surface-container-low p-5 transition hover:border-primary/30 justify-between">
+                            <div>
+                              <div className="flex items-start justify-between gap-3 mb-2">
+                                <h3 className="font-bold text-base text-on-surface leading-tight">{p.nombre}</h3>
+                                <span className="shrink-0 text-[10px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
+                                  {p.sku}
+                                </span>
+                              </div>
+                              
+                              {p.descripcion && (
+                                <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed line-clamp-2">{p.descripcion}</p>
+                              )}
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <span className="rounded bg-white/5 text-on-surface-variant text-[10px] px-2 py-1 font-bold border border-white/5">
+                                  Categoría: {p.nombreCategoria || p.categoria?.nombre || "General"}
+                                </span>
+                                <span className="rounded bg-white/5 text-on-surface-variant text-[10px] px-2 py-1 font-bold border border-white/5">
+                                  U.M.: {p.nombreUnidadMedida || "Unidad"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                                <Icon name="store" className="text-sm text-[#BA7517]" />
+                                <span className="font-bold text-on-surface-variant truncate max-w-[150px]" title={p.supplierName}>
+                                  {p.supplierName}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleStartAddToCart(p)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-on-primary transition hover:brightness-110"
+                              >
+                                <Icon name="add_shopping_cart" className="text-xs" />
+                                Comprar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column: Shopping Cart Side Panel */}
+                  <div className="sticky top-20 rounded-xl border border-white/10 bg-surface-container-low p-5 space-y-6">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-2">
+                        <Icon name="shopping_cart" className="text-primary text-lg" />
+                        <h2 className="font-bold text-on-surface text-lg">Carrito de Compras</h2>
+                      </div>
+                      <span className="rounded-full bg-primary/15 text-primary text-[11px] font-bold px-2 py-0.5">
+                        {cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
+
+                    {/* Order Date Selection */}
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                        Fecha requerida de orden
+                      </label>
+                      <input
+                        type="date"
+                        value={fechaOrden}
+                        onChange={(e) => setFechaOrden(e.target.value)}
+                        className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-xs font-bold text-on-surface outline-none transition focus:border-primary"
+                      />
+                    </div>
+
+                    {cartItems.length === 0 ? (
+                      <div className="text-center py-10 space-y-2 border border-dashed border-white/5 rounded-xl bg-black/10">
+                        <Icon name="shopping_basket" className="text-on-surface-variant/40 text-3xl" />
+                        <p className="text-xs text-on-surface-variant font-bold">Carrito Vacío</p>
+                        <p className="text-[10px] text-on-surface-variant/60 max-w-[200px] mx-auto leading-relaxed">
+                          Haga clic en el botón "Comprar" de algún producto para agregarlo.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-1">
+                        {Object.entries(
+                          cartItems.reduce((acc: { [key: string]: { supplierName: string; items: any[] } }, item) => {
+                            if (!acc[item.idProveedor]) {
+                              acc[item.idProveedor] = {
+                                supplierName: item.nombreProveedor,
+                                items: []
+                              };
+                            }
+                            acc[item.idProveedor].items.push(item);
+                            return acc;
+                          }, {})
+                        ).map(([supplierId, group]) => {
+                          const groupTotal = group.items.reduce((sum, item) => sum + item.subtotal, 0);
+                          return (
+                            <div key={supplierId} className="border border-white/10 rounded-xl overflow-hidden bg-surface-container-high/40">
+                              {/* Supplier Header */}
+                              <div className="px-3 py-2 bg-[#BA7517]/10 border-b border-white/10 flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-on-surface flex items-center gap-1">
+                                  <Icon name="store" className="text-xs text-[#BA7517]" />
+                                  {group.supplierName}
+                                </span>
+                                <span className="text-[11px] font-bold text-primary">Bs {groupTotal.toFixed(2)}</span>
+                              </div>
+                              
+                              {/* Items list */}
+                              <div className="divide-y divide-white/5">
+                                {group.items.map((item, idx) => {
+                                  // Find item index in original flat list
+                                  const globalIdx = cartItems.findIndex(
+                                    (ci) => ci.idProducto === item.idProducto && ci.idAlmacen === item.idAlmacen
+                                  );
+
+                                  const updateQty = (newQty: number) => {
+                                    const updated = [...cartItems];
+                                    const current = updated[globalIdx];
+                                    const validQty = Math.max(current.min, Math.min(current.max, current.stock, newQty));
+                                    current.cantidad = validQty;
+                                    current.subtotal = validQty * current.precioUnitario;
+                                    setCartItems(updated);
+                                  };
+
+                                  return (
+                                    <div key={idx} className="p-3 space-y-2">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <p className="text-xs font-bold text-on-surface line-clamp-1">{item.nombreProducto}</p>
+                                          <p className="text-[9px] text-on-surface-variant font-mono">{item.sku} • {item.nombreAlmacen}</p>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCartItems(prev => prev.filter((_, i) => i !== globalIdx))}
+                                          className="text-error hover:bg-error/10 p-0.5 rounded transition shrink-0"
+                                        >
+                                          <Icon name="close" className="text-xs" />
+                                        </button>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center gap-1 bg-surface border border-white/5 rounded px-1 py-0.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => updateQty(item.cantidad - 1)}
+                                            className="h-4 w-4 rounded hover:bg-white/5 flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                                          >
+                                            <Icon name="remove" className="text-[10px]" />
+                                          </button>
+                                          <span className="font-bold w-6 text-center text-xs">{item.cantidad}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateQty(item.cantidad + 1)}
+                                            className="h-4 w-4 rounded hover:bg-white/5 flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                                          >
+                                            <Icon name="add" className="text-[10px]" />
+                                          </button>
+                                        </div>
+
+                                        <div className="text-right">
+                                          <span className="text-[10px] text-on-surface-variant block">Bs {item.precioUnitario.toFixed(2)} c/u</span>
+                                          <span className="font-bold text-primary">Bs {item.subtotal.toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Supplier Action */}
+                              <div className="p-3 bg-surface-container-high border-t border-white/5">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePlaceOrderForSupplier(supplierId, group.items)}
+                                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-on-primary transition hover:brightness-110"
+                                >
+                                  <Icon name="send" className="text-[10px]" />
+                                  Realizar Orden (Bs {groupTotal.toFixed(2)})
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
             {active === "orders" && (
               <section className="space-y-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="font-display text-4xl font-bold text-on-surface">Mis ordenes</h2>
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-on-surface-variant">
-                      Gestione y rastree sus ordenes de compra en tiempo real a traves de nuestra red de suministros orquestada.
+                      Gestione y rastree sus ordenes de compra en tiempo real a traves de nuestra red de suministros orquestada. Para crear una nueva orden, diríjase a la pestaña de <strong className="text-primary">Catálogo / Compras</strong>.
                     </p>
                   </div>
-                  <button onClick={() => setShowCreateOrder(true)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-xs font-bold text-on-primary transition hover:brightness-110">
-                    <Icon name="add" className="text-base" />
-                    Nueva Orden
-                  </button>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -663,7 +1170,11 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                                 </span>
                               </td>
                               <td className="px-6 py-5 text-right">
-                                <button className="inline-flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface hover:text-primary" aria-label={`Ver ${order.id}`}>
+                                <button 
+                                  onClick={() => setSelectedViewOrder(order.raw)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface hover:text-primary" 
+                                  aria-label={`Ver ${order.id}`}
+                                >
                                   <Icon name="visibility" className="text-base" />
                                 </button>
                               </td>
@@ -858,14 +1369,17 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                       Administre sus acuerdos B2B activos, supervise tasas de descuento y revise términos contractuales con su red global de proveedores en tiempo real.
                     </p>
                   </div>
-                  {/* Botón interactivo conectado con el estado para abrir el modal */}
-                  <button 
-                    onClick={() => setIsContractModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-xs font-bold text-on-primary transition hover:brightness-110"
-                  >
-                    <Icon name="add" className="text-base" />
-                    Nuevo Contrato
-                  </button>
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 max-w-sm shrink-0">
+                    <p className="text-xs text-on-surface-variant leading-relaxed">
+                      Para establecer contratos con precios exclusivos, debe contactarse directamente con los proveedores.
+                    </p>
+                    <button 
+                      onClick={() => setActive("suppliers")}
+                      className="text-primary text-xs font-bold hover:underline flex items-center gap-1 mt-1.5"
+                    >
+                      Ver directorio de Proveedores <Icon name="arrow_forward" className="text-xs" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1100,19 +1614,35 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
                         </div>
 
                         <div className="mb-4">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-bold text-on-surface-variant">{s.metric}</span>
-                            <span className={`text-xs font-bold ${scoreColor}`}>{s.score}%</span>
-                          </div>
-                          <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${s.score}%` }} />
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">Categorías de Producto</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {s.categorias.map((cat: string) => (
+                              <span key={cat} className="rounded-md px-2 py-0.5 text-[10px] font-bold bg-[#BA7517]/10 text-[#BA7517] border border-[#BA7517]/20">
+                                {cat}
+                              </span>
+                            ))}
                           </div>
                         </div>
 
-                        <div className="mt-auto">
-                          <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 py-2.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-on-primary">
+                        <div className="mt-auto flex gap-2">
+                          <button 
+                            onClick={() => handleFetchCatalog(s.id, s.name)}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 py-2.5 text-xs font-bold text-primary transition hover:bg-primary hover:text-on-primary"
+                          >
                             <Icon name="menu_book" className="text-sm" />
-                            Catalog
+                            Catálogo
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              toast(`${s.name} - Info de Contacto`, {
+                                description: `Email: ${s.raw?.email || s.raw?.idEmpresa?.email || 'contacto@' + s.name.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com'}\nTeléfono: ${s.raw?.telefono || s.raw?.idEmpresa?.telefono || '+591 4 4567890'}`
+                              });
+                            }}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-surface-container-high text-on-surface-variant hover:text-primary transition shrink-0"
+                            title="Ver información de contacto"
+                          >
+                            <Icon name="contact_mail" className="text-sm" />
                           </button>
                         </div>
                       </div>
@@ -1408,11 +1938,139 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
           }}
         />
       )}
-      <CreateOrderModal
-        open={showCreateOrder}
-        onClose={() => setShowCreateOrder(false)}
-        onCreated={() => { setShowCreateOrder(false); /* refetch orders */ }}
-        />
+      {configuringCartProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface shadow-2xl overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-surface-container-high shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl font-semibold">add_shopping_cart</span>
+                <span className="font-bold text-on-surface">Agregar al Carrito</span>
+              </div>
+              <button 
+                onClick={() => setConfiguringCartProduct(null)} 
+                className="p-1 rounded-lg hover:bg-white/5 text-on-surface-variant transition"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <h3 className="font-bold text-base text-on-surface">{configuringCartProduct.nombre}</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">SKU: {configuringCartProduct.sku} • Proveedor: {configuringCartProduct.supplierName}</p>
+              </div>
+
+              {loadingConfigProduct ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <span className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                  <p className="text-xs text-on-surface-variant font-bold">Consultando inventario...</p>
+                </div>
+              ) : configProductDetails && configProductDetails.almacenes && configProductDetails.almacenes.length > 0 ? (
+                <>
+                  {/* Warehouse Selection */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      Seleccionar Almacén / Sucursal
+                    </label>
+                    <select
+                      value={selectedConfigWarehouse?.id || ""}
+                      onChange={(e) => {
+                        const warehouse = configProductDetails.almacenes.find((w: any) => w.id === e.target.value);
+                        setSelectedConfigWarehouse(warehouse);
+                        setConfigCantidad(warehouse?.cantidadMinima || 1);
+                      }}
+                      className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-xs font-bold text-on-surface outline-none transition focus:border-primary"
+                    >
+                      {configProductDetails.almacenes.map((w: any) => (
+                        <option key={w.id} value={w.id}>
+                          {w.nombre} (Stock: {w.stock} • Bs {w.precio.toFixed(2)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quantity selector & limits */}
+                  {selectedConfigWarehouse && (
+                    <div className="grid grid-cols-2 gap-4 border border-white/5 rounded-xl p-3 bg-surface-container-low/40">
+                      <div className="space-y-1">
+                        <span className="block text-[9px] uppercase font-bold text-on-surface-variant">Límites de compra</span>
+                        <p className="text-xs text-on-surface">Min: {selectedConfigWarehouse.cantidadMinima} • Max: {selectedConfigWarehouse.cantidadMaxima}</p>
+                        <p className="text-xs text-on-surface">Disponible: {selectedConfigWarehouse.stock} unid.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                          Cantidad
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setConfigCantidad(prev => Math.max(selectedConfigWarehouse.cantidadMinima, prev - 1))}
+                            className="h-7 w-7 rounded border border-white/10 bg-surface flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                          >
+                            <Icon name="remove" className="text-xs" />
+                          </button>
+                          <input
+                            type="number"
+                            value={configCantidad}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setConfigCantidad(val);
+                            }}
+                            onBlur={() => {
+                              const val = Math.max(selectedConfigWarehouse.cantidadMinima, Math.min(selectedConfigWarehouse.cantidadMaxima, selectedConfigWarehouse.stock, configCantidad));
+                              setConfigCantidad(val);
+                            }}
+                            className="w-12 text-center text-xs font-bold bg-surface border border-white/10 rounded py-1 outline-none text-on-surface animate-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setConfigCantidad(prev => Math.min(selectedConfigWarehouse.stock, selectedConfigWarehouse.cantidadMaxima, prev + 1))}
+                            className="h-7 w-7 rounded border border-white/10 bg-surface flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                          >
+                            <Icon name="add" className="text-xs" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Subtotal summary */}
+                  {selectedConfigWarehouse && (
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-xs text-on-surface-variant">Subtotal estimado:</span>
+                      <span className="text-sm font-bold text-primary">Bs {(selectedConfigWarehouse.precio * configCantidad).toFixed(2)}</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-6">
+                  <Icon name="warning" className="text-secondary text-2xl mb-2" />
+                  <p className="text-xs text-on-surface-variant font-bold">No hay almacenes ni stock disponible para este producto.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 border-t border-white/10 px-6 py-4 bg-surface-container-high shrink-0">
+              <button 
+                onClick={() => setConfiguringCartProduct(null)} 
+                className="rounded-lg border border-white/10 bg-surface px-4 py-2 text-xs font-bold text-on-surface-variant transition hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+              <button 
+                disabled={loadingConfigProduct || !selectedConfigWarehouse || configCantidad <= 0}
+                onClick={handleConfirmAddToCart} 
+                className="rounded-lg bg-primary px-5 py-2 text-xs font-bold text-on-primary transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Agregar al Carrito
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showBecomeSupplierModal && (
         <BecomeSupplierModal
           onClose={() => setShowBecomeSupplierModal(false)}
@@ -1427,6 +2085,175 @@ export function BuyerDashboard({ userEmail, onSignOut }: { userEmail: string; on
         onClose={() => setSelectedInvoiceForPay(null)}
         invoice={selectedInvoiceForPay}
       />
+      {selectedViewOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-surface shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-surface-container-high">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl">receipt_long</span>
+                <span className="font-bold text-on-surface">Detalle de la Orden: {selectedViewOrder.id}</span>
+              </div>
+              <button 
+                onClick={() => setSelectedViewOrder(null)} 
+                className="p-1 rounded-lg hover:bg-white/5 text-on-surface-variant transition"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4 text-sm border-b border-white/5 pb-4">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-on-surface-variant">Proveedor</p>
+                  <p className="font-bold mt-1 text-on-surface">{selectedViewOrder.nombreProveedor || "Proveedor Demo"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-on-surface-variant">Fecha</p>
+                  <p className="font-semibold mt-1 text-on-surface">{selectedViewOrder.fecha ? new Date(selectedViewOrder.fecha).toLocaleString() : "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-on-surface-variant">Estado</p>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary mt-1">
+                    {selectedViewOrder.idEstado || selectedViewOrder.status || "pendiente"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-on-surface-variant">Total General</p>
+                  <p className="font-bold text-lg text-primary mt-0.5">Bs {selectedViewOrder.total != null ? Number(selectedViewOrder.total).toFixed(2) : "0.00"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-on-surface-variant mb-2">Productos en esta Orden</p>
+                <div className="border border-white/10 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-container-high text-on-surface-variant">
+                      <tr>
+                        <th className="px-4 py-2 font-bold">Producto</th>
+                        <th className="px-4 py-2 font-bold">Cantidad</th>
+                        <th className="px-4 py-2 font-bold">Precio Unit.</th>
+                        <th className="px-4 py-2 font-bold text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-on-surface">
+                      {Array.isArray(selectedViewOrder.detalles) && selectedViewOrder.detalles.length > 0 ? (
+                        selectedViewOrder.detalles.map((d: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-3">
+                              <p className="font-bold">{d.idProducto?.nombre || d.nombreProducto || "Producto ID: " + d.idProducto}</p>
+                              {d.idProducto?.sku && <p className="text-[10px] text-on-surface-variant font-mono">{d.idProducto.sku}</p>}
+                            </td>
+                            <td className="px-4 py-3 font-semibold">{d.cantidad}</td>
+                            <td className="px-4 py-3">Bs {Number(d.precioUnitario).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-bold text-primary">Bs {Number(d.subtotal).toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-6 text-center text-on-surface-variant">
+                            No se encontraron detalles para esta orden (o se agregaron usando el formato anterior).
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-white/10 px-6 py-4 bg-surface-container-high">
+              <button 
+                onClick={() => setSelectedViewOrder(null)} 
+                className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedCatalogProvider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-surface shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-surface-container-high shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl font-semibold">menu_book</span>
+                <span className="font-bold text-on-surface">Catálogo de Productos: {selectedCatalogProvider.name}</span>
+              </div>
+              <button 
+                onClick={() => setSelectedCatalogProvider(null)} 
+                className="p-1 rounded-lg hover:bg-white/5 text-on-surface-variant transition"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {loadingCatalog ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <span className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                  <p className="text-sm text-on-surface-variant font-bold">Cargando catálogo...</p>
+                </div>
+              ) : catalogProducts.length === 0 ? (
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-on-surface-variant text-4xl mb-2">production_quantity_limits</span>
+                  <p className="text-sm text-on-surface-variant font-bold">Este proveedor aún no tiene productos registrados en su catálogo.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.entries(
+                    catalogProducts.reduce((groups: { [key: string]: any[] }, product) => {
+                      const category = product.nombreCategoria || "Otros";
+                      if (!groups[category]) groups[category] = [];
+                      groups[category].push(product);
+                      return groups;
+                    }, {})
+                  ).map(([categoryName, products]) => (
+                    <div key={categoryName} className="space-y-3">
+                      <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                        <span className="h-2 w-2 rounded-full bg-[#BA7517]" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#BA7517]">{categoryName}</h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-on-surface-variant font-bold">{products.length} productos</span>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {products.map((p: any) => (
+                          <div key={p.id} className="p-4 rounded-xl border border-white/5 bg-surface-container-low flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-bold text-sm text-on-surface leading-tight">{p.nombre}</p>
+                                <span className="shrink-0 text-[9px] font-mono font-bold bg-white/5 text-primary border border-white/10 px-1.5 py-0.5 rounded">
+                                  {p.sku}
+                                </span>
+                              </div>
+                              {p.descripcion && (
+                                <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed line-clamp-2">{p.descripcion}</p>
+                              )}
+                            </div>
+                            <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-on-surface-variant">
+                              <span className="font-semibold">U. Medida: {p.nombreUnidadMedida || "Unidad"}</span>
+                              <span className={`h-1.5 w-1.5 rounded-full ${p.activo ? "bg-tertiary" : "bg-neutral-500"}`} title={p.activo ? "Activo" : "Inactivo"} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 border-t border-white/10 px-6 py-4 bg-surface-container-high shrink-0">
+              <button 
+                onClick={() => setSelectedCatalogProvider(null)} 
+                className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

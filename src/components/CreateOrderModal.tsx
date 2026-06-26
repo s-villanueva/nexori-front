@@ -16,10 +16,25 @@ export interface Warehouse {
 }
 
 export interface ProductResult {
+  idProducto: string; // Product UUID
   sku: string;
   nombre: string;
   descripcion?: string;
   almacenes: Warehouse[];
+}
+
+export interface OrderDetail {
+  idProducto: string;
+  nombreProducto: string;
+  sku: string;
+  idAlmacen: string;
+  nombreAlmacen: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+  stock: number;
+  min: number;
+  max: number;
 }
 
 interface CreateOrderPayload {
@@ -29,6 +44,15 @@ interface CreateOrderPayload {
   idEstado: string;
   idProveedor: string;  // UUID
   idUsuario: string;    // UUID
+  idEmpresaCompradora?: string;
+  idSucursal?: string;
+  detalles: Array<{
+    cantidad: number;
+    precioUnitario: number;
+    subtotal: number;
+    idProducto: string;
+    idAlmacen: string;
+  }>;
   version: number;
 }
 
@@ -62,8 +86,11 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
   const [product, setProduct] = useState<ProductResult | null>(null);
 
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
-
   const [cantidad, setCantidad] = useState(1);
+
+  // Array of added items for multi-product support
+  const [addedDetails, setAddedDetails] = useState<OrderDetail[]>([]);
+
   const [fechaOrden, setFechaOrden] = useState(() => new Date().toISOString().split("T")[0]);
 
   const [submitting, setSubmitting] = useState(false);
@@ -79,6 +106,7 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
       setProduct(null);
       setSelectedWarehouse(null);
       setCantidad(1);
+      setAddedDetails([]);
       setFechaOrden(new Date().toISOString().split("T")[0]);
       setSubmitError("");
       setSuccess(false);
@@ -105,19 +133,18 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
       const res = await api.get(`/api/v1/producto-almacen/buscar?sku=${encodeURIComponent(trimmed)}`);
       if (!res) throw new Error("Producto no encontrado");
 
-      // Log real response so we can see the actual shape
       console.log("[CreateOrderModal] SKU response:", JSON.stringify(res, null, 2));
 
-      // Normalize: API may return an array directly, or wrap in { content, data, almacenes, etc. }
       let normalized: ProductResult;
       if (Array.isArray(res)) {
         const first = res[0] ?? {};
         normalized = {
+          idProducto: (first.idProducto?.id || first.idProducto || first.id || "") as string,
           sku: trimmed,
           nombre: first.nombreProducto ?? "Producto",
           descripcion: undefined,
           almacenes: res.map((item: any, index: number) => ({
-            id: item.idAlmacen ?? `almacen-${index}`,
+            id: item.idAlmacen?.id ?? item.idAlmacen ?? `almacen-${index}`,
             nombre: item.nombreAlmacen ?? `Almacén ${index + 1}`,
             idProveedor: item.idProveedor ?? "",
             nombreProveedor: item.nombreProveedor ?? item.nombreAlmacen ?? "",
@@ -128,8 +155,8 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
           })),
         };
       } else {
-        // Object shape — ensure almacenes is always an array
         normalized = {
+          idProducto: (res.idProducto?.id || res.idProducto || res.id || "") as string,
           sku: res.sku ?? res.codigoSku ?? trimmed,
           nombre: res.nombreProducto ?? res.nombre ?? "Producto",
           descripcion: res.descripcion ?? undefined,
@@ -158,20 +185,94 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
     if (e.key === "Enter") handleSkuSearch();
   }
 
-  async function handleSubmit() {
-    if (!selectedWarehouse || !product || !user) return;
+  function handleAddProduct() {
+    if (!product || !selectedWarehouse) return;
 
-    const total = selectedWarehouse.precio * cantidad;
+    // Check if product + warehouse combo already added
+    const existingIndex = addedDetails.findIndex(
+      (d) => d.idProducto === product.idProducto && d.idAlmacen === selectedWarehouse.id
+    );
+
+    const subtotal = selectedWarehouse.precio * cantidad;
+
+    if (existingIndex > -1) {
+      const updated = [...addedDetails];
+      const current = updated[existingIndex];
+      const newQty = current.cantidad + cantidad;
+      if (newQty > Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock)) {
+        setSubmitError(`La cantidad excede el stock o límite máximo del almacén para ${product.nombre}`);
+        return;
+      }
+      current.cantidad = newQty;
+      current.subtotal = current.cantidad * current.precioUnitario;
+      setAddedDetails(updated);
+    } else {
+      setAddedDetails([
+        ...addedDetails,
+        {
+          idProducto: product.idProducto,
+          nombreProducto: product.nombre,
+          sku: product.sku,
+          idAlmacen: selectedWarehouse.id,
+          nombreAlmacen: selectedWarehouse.nombre,
+          cantidad,
+          precioUnitario: selectedWarehouse.precio,
+          subtotal,
+          stock: selectedWarehouse.stock,
+          min: selectedWarehouse.cantidadMinima,
+          max: selectedWarehouse.cantidadMaxima,
+        },
+      ]);
+    }
+
+    // Reset selection for next search/addition
+    setSku("");
+    setProduct(null);
+    setSelectedWarehouse(null);
+    setCantidad(1);
+    setSubmitError("");
+  }
+
+  function handleRemoveDetail(index: number) {
+    setAddedDetails(addedDetails.filter((_, idx) => idx !== index));
+  }
+
+  function handleUpdateDetailQty(index: number, newQty: number) {
+    const updated = [...addedDetails];
+    const detail = updated[index];
+    const validQty = Math.max(detail.min, Math.min(detail.max, detail.stock, newQty));
+    detail.cantidad = validQty;
+    detail.subtotal = validQty * detail.precioUnitario;
+    setAddedDetails(updated);
+  }
+
+  async function handleSubmit() {
+    if (addedDetails.length === 0 || !user) return;
+
+    // The supplier of the order is derived from the details' warehouses
+    const firstDetail = addedDetails[0];
+    const idProveedor = product?.almacenes.find(w => w.id === firstDetail.idAlmacen)?.idProveedor || "";
+
+    const totalGeneral = addedDetails.reduce((acc, curr) => acc + curr.subtotal, 0);
     const now = new Date();
 
     const payload: CreateOrderPayload = {
-      total,
+      total: totalGeneral,
       fecha: now.toISOString(),
       fechaOrden,
       idEstado: "pendiente",
-      idProveedor: selectedWarehouse.idProveedor,
+      idProveedor: idProveedor || user.idProveedor || "",
       idUsuario: user.id,
-      version: 0
+      idEmpresaCompradora: user.id_empresa,
+      idSucursal: user.id_sucursal,
+      detalles: addedDetails.map((d) => ({
+        cantidad: d.cantidad,
+        precioUnitario: d.precioUnitario,
+        subtotal: d.subtotal,
+        idProducto: d.idProducto,
+        idAlmacen: d.idAlmacen,
+      })),
+      version: 0,
     };
 
     console.log("[CreateOrderModal] Submitting order payload:", payload);
@@ -189,7 +290,8 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
     }
   }
 
-  const total = selectedWarehouse ? selectedWarehouse.precio * cantidad : 0;
+  const generalTotal = addedDetails.reduce((acc, curr) => acc + curr.subtotal, 0);
+  const currentTotal = selectedWarehouse ? selectedWarehouse.precio * cantidad : 0;
   const cantidadValid =
     selectedWarehouse !== null &&
     cantidad >= selectedWarehouse.cantidadMinima &&
@@ -201,7 +303,7 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
       <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       <div role="dialog" aria-modal="true" aria-label="Nueva orden de compra" className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="relative flex w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-surface shadow-2xl">
+        <div className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-white/10 bg-surface shadow-2xl">
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
@@ -211,7 +313,7 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
               </div>
               <div>
                 <p className="font-bold text-on-surface">Nueva Orden de Compra</p>
-                <p className="text-[11px] text-on-surface-variant">Busca un producto por SKU y elige el almacén</p>
+                <p className="text-[11px] text-on-surface-variant">Agrega múltiples productos buscando por SKU</p>
               </div>
             </div>
             <button
@@ -242,198 +344,274 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
               </div>
             ) : (
               <>
-                {/* Step 1: SKU */}
+                {/* Global Date Selection */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                    Buscar producto por SKU
+                    Fecha de orden
                   </label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Icon name="qr_code" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" />
-                      <input
-                        ref={skuInputRef}
-                        type="text"
-                        value={sku}
-                        onChange={(e) => { setSku(e.target.value); setSkuError(""); setProduct(null); setSelectedWarehouse(null); }}
-                        onKeyDown={handleSkuKeyDown}
-                        placeholder="Ej. PROD-00123"
-                        className="w-full rounded-lg border border-white/10 bg-surface-container-low pl-10 pr-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none transition focus:border-primary"
-                      />
-                    </div>
-                    <button
-                      onClick={handleSkuSearch}
-                      disabled={!sku.trim() || skuLoading}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-xs font-bold text-on-primary transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {skuLoading
-                        ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary border-t-transparent" />
-                        : <Icon name="search" className="text-sm" />}
-                      Buscar
-                    </button>
-                  </div>
-                  {skuError && (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-error">
-                      <Icon name="error_outline" className="text-sm" />
-                      {skuError}
-                    </p>
-                  )}
+                  <input
+                    type="date"
+                    value={fechaOrden}
+                    onChange={(e) => setFechaOrden(e.target.value)}
+                    className="max-w-xs rounded-lg border border-white/10 bg-surface-container-low px-3 py-2 text-sm font-bold text-on-surface outline-none transition focus:border-primary"
+                  />
                 </div>
 
-                {/* Product info */}
-                {product && (
-                  <>
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 px-5 py-4 flex items-start gap-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                        <Icon name="inventory_2" className="text-primary text-base" />
+                {/* Added Products Table */}
+                {addedDetails.length > 0 && (
+                  <div className="border border-white/10 rounded-xl overflow-hidden bg-surface-container-low">
+                    <div className="px-4 py-3 bg-surface-container-high border-b border-white/10 flex items-center justify-between">
+                      <span className="text-xs font-bold text-on-surface">Productos agregados a la orden</span>
+                      <span className="text-xs font-bold text-primary">Total: Bs {generalTotal.toFixed(2)}</span>
+                    </div>
+                    <table className="w-full text-left text-xs text-on-surface">
+                      <thead>
+                        <tr className="border-b border-white/5 bg-surface-container-low text-on-surface-variant">
+                          <th className="px-4 py-2">Producto / SKU</th>
+                          <th className="px-4 py-2">Almacén</th>
+                          <th className="px-4 py-2">Cant.</th>
+                          <th className="px-4 py-2">Precio Unit.</th>
+                          <th className="px-4 py-2">Subtotal</th>
+                          <th className="px-4 py-2 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {addedDetails.map((detail, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-3">
+                              <p className="font-bold">{detail.nombreProducto}</p>
+                              <p className="text-[10px] text-on-surface-variant font-mono">{detail.sku}</p>
+                            </td>
+                            <td className="px-4 py-3 text-on-surface-variant">{detail.nombreAlmacen}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDetailQty(index, detail.cantidad - 1)}
+                                  className="h-6 w-6 rounded border border-white/10 bg-surface flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                                >
+                                  <Icon name="remove" className="text-xs" />
+                                </button>
+                                <span className="font-bold w-8 text-center">{detail.cantidad}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDetailQty(index, detail.cantidad + 1)}
+                                  className="h-6 w-6 rounded border border-white/10 bg-surface flex items-center justify-center text-on-surface-variant hover:text-primary transition"
+                                >
+                                  <Icon name="add" className="text-xs" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-semibold">Bs {detail.precioUnitario.toFixed(2)}</td>
+                            <td className="px-4 py-3 font-bold text-primary">Bs {detail.subtotal.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDetail(index)}
+                                className="text-error hover:bg-error/10 p-1 rounded transition"
+                                aria-label="Eliminar"
+                              >
+                                <Icon name="delete" className="text-base" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Step 1: SKU */}
+                <div className="border border-white/5 rounded-xl p-4 bg-surface-container-low/40">
+                  <p className="text-xs font-bold text-on-surface mb-3 flex items-center gap-1.5">
+                    <Icon name="add_circle" className="text-primary text-sm" />
+                    Buscar y Agregar Producto
+                  </p>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                      Buscar producto por SKU
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Icon name="qr_code" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" />
+                        <input
+                          ref={skuInputRef}
+                          type="text"
+                          value={sku}
+                          onChange={(e) => { setSku(e.target.value); setSkuError(""); setProduct(null); setSelectedWarehouse(null); }}
+                          onKeyDown={handleSkuKeyDown}
+                          placeholder="Ej. PROD-00123"
+                          className="w-full rounded-lg border border-white/10 bg-surface-container-low pl-10 pr-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none transition focus:border-primary"
+                        />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-on-surface">{product.nombre}</p>
-                        <p className="text-[11px] text-on-surface-variant mt-0.5">
-                          SKU: <span className="font-mono text-primary">{product.sku}</span>
-                        </p>
-                        {product.descripcion && (
-                          <p className="mt-1 text-xs text-on-surface-variant leading-5 line-clamp-2">{product.descripcion}</p>
+                      <button
+                        onClick={handleSkuSearch}
+                        disabled={!sku.trim() || skuLoading}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {skuLoading
+                          ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary border-t-transparent" />
+                          : <Icon name="search" className="text-sm" />}
+                        Buscar
+                      </button>
+                    </div>
+                    {skuError && (
+                      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-error">
+                        <Icon name="error_outline" className="text-sm" />
+                        {skuError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Product info */}
+                  {product && (
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-xl border border-primary/20 bg-primary/5 px-5 py-4 flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                          <Icon name="inventory_2" className="text-primary text-base" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-on-surface">{product.nombre}</p>
+                          <p className="text-[11px] text-on-surface-variant mt-0.5">
+                            SKU: <span className="font-mono text-primary">{product.sku}</span>
+                          </p>
+                          {product.descripcion && (
+                            <p className="mt-1 text-xs text-on-surface-variant leading-5 line-clamp-2">{product.descripcion}</p>
+                          )}
+                        </div>
+                        <span className="shrink-0 rounded-full bg-tertiary/10 border border-tertiary/20 px-2.5 py-1 text-[10px] font-bold text-tertiary">
+                          {product.almacenes.length} almacén{product.almacenes.length !== 1 ? "es" : ""}
+                        </span>
+                      </div>
+
+                      {/* Step 2: Warehouse */}
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">
+                          Seleccionar almacén
+                        </label>
+                        {product.almacenes.length === 0 ? (
+                          <div className="rounded-xl border border-white/10 bg-surface-container-low px-5 py-6 text-center">
+                            <Icon name="warehouse" className="text-on-surface-variant text-2xl mb-2" />
+                            <p className="text-sm text-on-surface-variant">No hay almacenes disponibles para este producto.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {product.almacenes.map((w) => {
+                              const isSelected = selectedWarehouse?.id === w.id;
+                              const outOfStock = w.stock === 0;
+                              return (
+                                <button
+                                  key={w.id}
+                                  type="button"
+                                  disabled={outOfStock}
+                                  onClick={() => setSelectedWarehouse(isSelected ? null : w)}
+                                  className={`w-full text-left rounded-xl border px-5 py-4 transition ${
+                                    isSelected
+                                      ? "border-primary bg-primary/[0.08]"
+                                      : outOfStock
+                                      ? "border-white/5 bg-surface-container-low/50 opacity-50 cursor-not-allowed"
+                                      : "border-white/10 bg-surface-container-low hover:border-primary/30"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                      <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                                        isSelected ? "border-primary bg-primary" : "border-white/20"
+                                      }`}>
+                                        {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-on-primary" />}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="font-bold text-sm text-on-surface truncate">{w.nombre}</p>
+                                        <p className="text-[11px] text-on-surface-variant mt-0.5 flex items-center gap-1">
+                                          <Icon name="store" className="text-xs" />
+                                          {w.nombreProveedor}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="shrink-0 grid grid-cols-3 gap-4 text-right">
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Stock</p>
+                                        <p className={`text-sm font-bold mt-0.5 ${outOfStock ? "text-error" : w.stock < 10 ? "text-secondary" : "text-tertiary"}`}>
+                                          {outOfStock ? "Agotado" : w.stock}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Precio</p>
+                                        <p className="text-sm font-bold text-on-surface mt-0.5">Bs {w.precio.toFixed(2)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Min/Máx</p>
+                                        <p className="text-sm font-bold text-on-surface-variant mt-0.5">{w.cantidadMinima}–{w.cantidadMaxima}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
-                      <span className="shrink-0 rounded-full bg-tertiary/10 border border-tertiary/20 px-2.5 py-1 text-[10px] font-bold text-tertiary">
-                        {product.almacenes.length} almacén{product.almacenes.length !== 1 ? "es" : ""}
-                      </span>
-                    </div>
 
-                    {/* Step 2: Warehouse */}
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">
-                        Seleccionar almacén
-                      </label>
-                      {product.almacenes.length === 0 ? (
-                        <div className="rounded-xl border border-white/10 bg-surface-container-low px-5 py-6 text-center">
-                          <Icon name="warehouse" className="text-on-surface-variant text-2xl mb-2" />
-                          <p className="text-sm text-on-surface-variant">No hay almacenes disponibles para este producto.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {product.almacenes.map((w) => {
-                            const isSelected = selectedWarehouse?.id === w.id;
-                            const outOfStock = w.stock === 0;
-                            return (
+                      {/* Step 3: Quantity */}
+                      {selectedWarehouse && (
+                        <div className="space-y-4">
+                          <div className="max-w-xs">
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                              Cantidad
+                            </label>
+                            <div className="flex items-center gap-2">
                               <button
-                                key={w.id}
                                 type="button"
-                                disabled={outOfStock}
-                                onClick={() => setSelectedWarehouse(isSelected ? null : w)}
-                                className={`w-full text-left rounded-xl border px-5 py-4 transition ${
-                                  isSelected
-                                    ? "border-primary bg-primary/[0.08]"
-                                    : outOfStock
-                                    ? "border-white/5 bg-surface-container-low/50 opacity-50 cursor-not-allowed"
-                                    : "border-white/10 bg-surface-container-low hover:border-primary/30"
-                                }`}
+                                onClick={() => setCantidad((v) => Math.max(selectedWarehouse.cantidadMinima, v - 1))}
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-container-low text-on-surface-variant transition hover:border-primary/30 hover:text-primary"
                               >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex items-start gap-3 min-w-0">
-                                    <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition ${
-                                      isSelected ? "border-primary bg-primary" : "border-white/20"
-                                    }`}>
-                                      {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-on-primary" />}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-sm text-on-surface truncate">{w.nombre}</p>
-                                      <p className="text-[11px] text-on-surface-variant mt-0.5 flex items-center gap-1">
-                                        <Icon name="store" className="text-xs" />
-                                        {w.nombreProveedor}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="shrink-0 grid grid-cols-3 gap-4 text-right">
-                                    <div>
-                                      <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Stock</p>
-                                      <p className={`text-sm font-bold mt-0.5 ${outOfStock ? "text-error" : w.stock < 10 ? "text-secondary" : "text-tertiary"}`}>
-                                        {outOfStock ? "Agotado" : w.stock}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Precio</p>
-                                      <p className="text-sm font-bold text-on-surface mt-0.5">Bs {w.precio.toFixed(2)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Min/Máx</p>
-                                      <p className="text-sm font-bold text-on-surface-variant mt-0.5">{w.cantidadMinima}–{w.cantidadMaxima}</p>
-                                    </div>
-                                  </div>
-                                </div>
+                                <Icon name="remove" className="text-sm" />
                               </button>
-                            );
-                          })}
+                              <input
+                                type="number"
+                                value={cantidad}
+                                min={selectedWarehouse.cantidadMinima}
+                                max={Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock)}
+                                onChange={(e) => setCantidad(Number(e.target.value))}
+                                className="w-full rounded-lg border border-white/10 bg-surface-container-low px-3 py-2.5 text-center text-sm font-bold text-on-surface outline-none transition focus:border-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setCantidad((v) => Math.min(Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock), v + 1))}
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-container-low text-on-surface-variant transition hover:border-primary/30 hover:text-primary"
+                              >
+                                <Icon name="add" className="text-sm" />
+                              </button>
+                            </div>
+                            {!cantidadValid && cantidad > 0 && (
+                              <p className="mt-1.5 text-[11px] font-semibold text-secondary">
+                                Rango válido: {selectedWarehouse.cantidadMinima}–{Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock)}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Item Subtotal Preview and Add Button */}
+                          {cantidadValid && (
+                            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl p-4">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Subtotal</span>
+                                <span className="text-lg font-bold text-primary">Bs {currentTotal.toFixed(2)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleAddProduct}
+                                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110"
+                              >
+                                <Icon name="add" className="text-sm" />
+                                Agregar Producto a la Orden
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-
-                    {/* Step 3: Quantity + date */}
-                    {selectedWarehouse && (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                            Cantidad
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setCantidad((v) => Math.max(selectedWarehouse.cantidadMinima, v - 1))}
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-container-low text-on-surface-variant transition hover:border-primary/30 hover:text-primary"
-                            >
-                              <Icon name="remove" className="text-sm" />
-                            </button>
-                            <input
-                              type="number"
-                              value={cantidad}
-                              min={selectedWarehouse.cantidadMinima}
-                              max={Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock)}
-                              onChange={(e) => setCantidad(Number(e.target.value))}
-                              className="w-full rounded-lg border border-white/10 bg-surface-container-low px-3 py-2.5 text-center text-sm font-bold text-on-surface outline-none transition focus:border-primary"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setCantidad((v) => Math.min(Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock), v + 1))}
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-container-low text-on-surface-variant transition hover:border-primary/30 hover:text-primary"
-                            >
-                              <Icon name="add" className="text-sm" />
-                            </button>
-                          </div>
-                          {!cantidadValid && cantidad > 0 && (
-                            <p className="mt-1.5 text-[11px] font-semibold text-secondary">
-                              Rango válido: {selectedWarehouse.cantidadMinima}–{Math.min(selectedWarehouse.cantidadMaxima, selectedWarehouse.stock)}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                            Fecha de orden
-                          </label>
-                          <input
-                            type="date"
-                            value={fechaOrden}
-                            onChange={(e) => setFechaOrden(e.target.value)}
-                            className="w-full rounded-lg border border-white/10 bg-surface-container-low px-3 py-2.5 text-sm font-bold text-on-surface outline-none transition focus:border-primary"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Total preview */}
-                    {selectedWarehouse && cantidadValid && (
-                      <div className="rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                          <Icon name="calculate" className="text-primary text-base" />
-                          <span className="font-bold">{cantidad} × Bs {selectedWarehouse.precio.toFixed(2)}</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Total</p>
-                          <p className="text-2xl font-bold text-primary">Bs {total.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                  )}
+                </div>
 
                 {submitError && (
                   <div className="flex items-start gap-2 rounded-lg border border-error/20 bg-error/5 px-4 py-3 text-xs font-semibold text-error">
@@ -456,7 +634,7 @@ export function CreateOrderModal({ open, onClose, onCreated }: Props) {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!selectedWarehouse || !cantidadValid || submitting}
+                disabled={addedDetails.length === 0 || submitting}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-xs font-bold text-on-primary transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {submitting

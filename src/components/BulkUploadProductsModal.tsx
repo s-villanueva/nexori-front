@@ -1,9 +1,14 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { api } from "../api/client";
 import * as XLSX from "xlsx";
 
 interface ParsedRow {
   [key: string]: string | number;
+}
+
+interface Categoria {
+  id: string;
+  nombre: string;
 }
 
 interface BulkUploadProductsModalProps {
@@ -26,7 +31,32 @@ export function BulkUploadProductsModal({
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [parseError, setParseError] = useState("");
+  
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    async function loadCategories() {
+      setLoadingCategories(true);
+      try {
+        const res = await api.get("/api/v1/categorias");
+        if (res && Array.isArray(res)) {
+          setCategorias(res);
+          if (res.length > 0) {
+            setSelectedCategoryId(res[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Error al cargar categorías:", err);
+      } finally {
+        setLoadingCategories(false);
+      }
+    }
+    loadCategories();
+  }, []);
 
   const parseFile = useCallback((f: File) => {
     setParseError("");
@@ -88,52 +118,56 @@ export function BulkUploadProductsModal({
     const selected = e.target.files?.[0];
     if (selected) handleFile(selected);
   };
-const handleUpload = async () => {
-  if (!file) return;
-  setUploadState("uploading");
-  setErrorMsg("");
 
-  try {
-    let fileToSend: File;
+  const handleUpload = async () => {
+    if (!file || !selectedCategoryId) return;
+    setUploadState("uploading");
+    setErrorMsg("");
 
-    if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const csv = XLSX.utils.sheet_to_csv(sheet);
-      const blob = new Blob([csv], { type: "text/csv" });
-      fileToSend = new File([blob], file.name.replace(/\.xlsx?$/, ".csv"), { type: "text/csv" });
-    } else {
-      fileToSend = file;
-    }
+    try {
+      let fileToSend: File;
 
-    const formData = new FormData();
-    formData.append("file", fileToSend);
-
-    const token = localStorage.getItem("b2b_token"); // ajusta según donde guardas el token
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/v1/products/bulk-upload?idEmpresa=${idEmpresa}`,
-      {
-        method: "POST",
-        body: formData,
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        const blob = new Blob([csv], { type: "text/csv" });
+        fileToSend = new File([blob], file.name.replace(/\.xlsx?$/, ".csv"), { type: "text/csv" });
+      } else {
+        fileToSend = file;
       }
-    );
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Error ${response.status}`);
+      const formData = new FormData();
+      formData.append("file", fileToSend);
+
+      const token = localStorage.getItem("b2b_token");
+      const url = `${import.meta.env.VITE_API_URL}/api/v1/products/bulk-upload?idEmpresa=${idEmpresa}&idCategoria=${selectedCategoryId}`;
+      
+      const response = await fetch(
+        url,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Error ${response.status}`);
+      }
+
+      setUploadState("success");
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+    } catch (err: any) {
+      setUploadState("error");
+      setErrorMsg(err?.message || "Error al subir el archivo.");
     }
+  };
 
-    setUploadState("success");
-    setTimeout(() => { onSuccess(); onClose(); }, 1500);
-  } catch (err: any) {
-    setUploadState("error");
-    setErrorMsg(err?.message || "Error al subir el archivo.");
-  }
-};
   const handleReset = () => {
     setFile(null);
     setPreview([]);
@@ -169,6 +203,31 @@ const handleUpload = async () => {
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
+
+          {/* Category Dropdown */}
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+              Categoría preseleccionada para lote
+            </label>
+            {loadingCategories ? (
+              <div className="h-10 w-full rounded-xl bg-surface-container-low animate-pulse" />
+            ) : (
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none transition focus:border-primary"
+              >
+                {categorias.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="text-[10px] text-on-surface-variant">
+              Todos los productos importados en este archivo se registrarán bajo la categoría seleccionada.
+            </p>
+          </div>
 
           {/* Drag & Drop Zone */}
           {!file && (
